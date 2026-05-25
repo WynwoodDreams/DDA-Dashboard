@@ -282,6 +282,7 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
         <svg></svg>
         <div class="graph-controls" id="graph-controls" style="display:none">
           <button id="g-rotate" title="Toggle slow rotation">↻ Rotate</button>
+          <button id="g-bundle" title="Bundle proximity edges (FDEB)">≋ Bundle</button>
           <button id="g-reheat" title="Reheat the simulation">↯ Reheat</button>
           <button id="g-reset" title="Reset zoom &amp; layout">⤢ Reset</button>
         </div>
@@ -414,6 +415,7 @@ let graphRotateAngle = 0;
 let graphZoomBehavior = null;
 let pinnedNodeId = null;
 const activeTypeFilter = new Set();   // empty = show all
+let graphBundleOn = false;
 
 // =====================================================================
 // HELPERS
@@ -1079,6 +1081,100 @@ function buildGraph(){
   return { nodes: workingNodes, edges: finalEdges, typeColors, typeCounts, truncated: nodes.length > MAX_GRAPH_NODES };
 }
 
+// ---- Force-Directed Edge Bundling (Holten/van Wijk 2009) ----
+// Lightweight implementation: only bundles proximity edges (the noisy majority);
+// folio + address edges remain straight so meaningful pairwise links stay legible.
+const FDEB_SEGMENTS = 6;        // subdivision points per edge (excludes endpoints)
+const FDEB_ITERATIONS = 4;
+const FDEB_K = 0.1;             // spring constant
+const FDEB_MAX_EDGES = 1200;    // cap for perf
+const FDEB_COMPAT_THRESHOLD = 0.55;
+
+function fdebBundle(edges, nodeById){
+  // Only proximity-kind edges; biggest visual win, smallest cognitive cost
+  const work = edges.filter(e => e.kind === 'proximity');
+  if(work.length === 0) return;
+  const subset = work.length > FDEB_MAX_EDGES
+    ? work.slice().sort(() => Math.random() - 0.5).slice(0, FDEB_MAX_EDGES)
+    : work;
+  const getPos = ref => typeof ref === 'object' ? ref : nodeById.get(ref);
+
+  // Init control points by linear interpolation
+  const cps = subset.map(e => {
+    const s = getPos(e.source), t = getPos(e.target);
+    const arr = [];
+    for(let i = 1; i <= FDEB_SEGMENTS; i++){
+      const k = i / (FDEB_SEGMENTS + 1);
+      arr.push({ x: s.x + (t.x - s.x) * k, y: s.y + (t.y - s.y) * k });
+    }
+    return arr;
+  });
+
+  // Precompute edge geometry
+  const geom = subset.map(e => {
+    const s = getPos(e.source), t = getPos(e.target);
+    const dx = t.x - s.x, dy = t.y - s.y;
+    const len = Math.hypot(dx, dy) || 1;
+    return { sx: s.x, sy: s.y, tx: t.x, ty: t.y, dx, dy, len, mx: (s.x+t.x)/2, my: (s.y+t.y)/2 };
+  });
+
+  // Compatibility matrix (sparse — only store pairs that pass threshold)
+  const compat = subset.map(() => []);
+  for(let i = 0; i < subset.length; i++){
+    const gi = geom[i];
+    for(let j = i + 1; j < subset.length; j++){
+      const gj = geom[j];
+      const lAvg = (gi.len + gj.len) * 0.5;
+      const lDiff = Math.abs(gi.len - gj.len);
+      const cLen = 2 * lAvg / (lAvg + lDiff + 0.001) - 1;
+      if(cLen < FDEB_COMPAT_THRESHOLD) continue;
+      const dMid = Math.hypot(gi.mx - gj.mx, gi.my - gj.my);
+      const cPos = lAvg / (lAvg + dMid + 0.001);
+      if(cPos < FDEB_COMPAT_THRESHOLD) continue;
+      const dot = gi.dx * gj.dx + gi.dy * gj.dy;
+      const cAng = Math.abs(dot / (gi.len * gj.len + 0.001));
+      if(cAng < FDEB_COMPAT_THRESHOLD) continue;
+      const c = cLen * cPos * cAng;
+      compat[i].push([j, c]);
+      compat[j].push([i, c]);
+    }
+  }
+
+  // Iterate: each control point gets spring (toward neighbors on same edge)
+  // + electrostatic (pull toward same-index control point on compatible edges).
+  for(let iter = 0; iter < FDEB_ITERATIONS; iter++){
+    const next = cps.map(arr => arr.map(p => ({ x: p.x, y: p.y })));
+    for(let i = 0; i < subset.length; i++){
+      const cp = cps[i], g = geom[i];
+      for(let s = 0; s < cp.length; s++){
+        const p = cp[s];
+        const prev = s === 0 ? { x: g.sx, y: g.sy } : cp[s-1];
+        const fwd  = s === cp.length - 1 ? { x: g.tx, y: g.ty } : cp[s+1];
+        let fx = FDEB_K * (prev.x + fwd.x - 2 * p.x);
+        let fy = FDEB_K * (prev.y + fwd.y - 2 * p.y);
+        for(const [j, c] of compat[i]){
+          const op = cps[j][s];
+          const ddx = op.x - p.x, ddy = op.y - p.y;
+          const d = Math.hypot(ddx, ddy) + 1;
+          fx += c * ddx / d;
+          fy += c * ddy / d;
+        }
+        next[i][s].x = p.x + fx;
+        next[i][s].y = p.y + fy;
+      }
+    }
+    // Apply
+    for(let i = 0; i < subset.length; i++) cps[i] = next[i];
+  }
+
+  // Attach control points back to edges
+  subset.forEach((e, i) => { e._cp = cps[i]; });
+}
+
+function fdebClear(edges){
+  edges.forEach(e => { delete e._cp; });
+}
+
 function renderGraph(){
   if(typeof d3 === 'undefined'){
     console.warn('[graph] d3 missing'); return;
@@ -1177,13 +1273,24 @@ function renderGraph(){
 
   const linkSel = rotateLayer.append('g')
     .attr('stroke-opacity', 0.35)
-    .selectAll('line')
+    .attr('fill', 'none')
+    .selectAll('path')
     .data(edges)
-    .enter().append('line')
+    .enter().append('path')
       .attr('class', 'glink')
       .attr('data-i', (d, i) => i)
       .attr('stroke', d => d.kind === 'folio' ? '#0b6cb5' : d.kind === 'address' ? '#0891b2' : '#cbd5e1')
       .attr('stroke-width', d => d.weight * 0.55);
+
+  // Build SVG path from edge (straight or bundled via control points)
+  const linePath = d3.line().x(p => p.x).y(p => p.y).curve(d3.curveBasis);
+  function linkD(d){
+    const s = d.source, t = d.target;
+    if(d._cp && d._cp.length){
+      return linePath([{x:s.x,y:s.y}, ...d._cp, {x:t.x,y:t.y}]);
+    }
+    return `M${s.x},${s.y}L${t.x},${t.y}`;
+  }
 
   // Recent: permits issued in last 30 days
   const recentCutoff = Date.now() - 30 * 24 * 3600 * 1000;
@@ -1361,25 +1468,51 @@ function renderGraph(){
     .alpha(0.9)
     .alphaDecay(0.04)
     .on('tick', () => {
-      linkSel.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      linkSel.attr('d', linkD);
       nodeSel.attr('cx', d => d.x).attr('cy', d => d.y);
       labelSel.attr('x', d => d.x).attr('y', d => d.y - radiusOf(d) - 5);
     })
     .on('end', () => {
       // Draw a soft DDA halo around the centroid of DDA-inside nodes
       const ddaNodes = nodes.filter(n => n.inDDA);
-      if(ddaNodes.length < 3) return;
-      const cx = ddaNodes.reduce((s,n) => s+n.x, 0) / ddaNodes.length;
-      const cy = ddaNodes.reduce((s,n) => s+n.y, 0) / ddaNodes.length;
-      const maxR = Math.max(...ddaNodes.map(n => Math.hypot(n.x-cx, n.y-cy))) + 20;
-      ddaBg.selectAll('*').remove();
-      ddaBg.append('circle').attr('cx', cx).attr('cy', cy).attr('r', maxR)
-        .attr('fill', '#0b6cb5').attr('fill-opacity', 0.04)
-        .attr('stroke', '#0b6cb5').attr('stroke-opacity', 0.35).attr('stroke-dasharray', '6 4').attr('stroke-width', 1.5);
-      ddaBg.append('text').attr('x', cx).attr('y', cy - maxR - 6).attr('text-anchor', 'middle')
-        .attr('font-size', 10).attr('font-weight', 700).attr('letter-spacing', '0.08em')
-        .attr('fill', '#0b6cb5').attr('opacity', 0.7).text('DDA BOUNDARY');
+      if(ddaNodes.length >= 3){
+        const cx = ddaNodes.reduce((s,n) => s+n.x, 0) / ddaNodes.length;
+        const cy = ddaNodes.reduce((s,n) => s+n.y, 0) / ddaNodes.length;
+        const maxR = Math.max(...ddaNodes.map(n => Math.hypot(n.x-cx, n.y-cy))) + 20;
+        ddaBg.selectAll('*').remove();
+        ddaBg.append('circle').attr('cx', cx).attr('cy', cy).attr('r', maxR)
+          .attr('fill', '#0b6cb5').attr('fill-opacity', 0.04)
+          .attr('stroke', '#0b6cb5').attr('stroke-opacity', 0.35).attr('stroke-dasharray', '6 4').attr('stroke-width', 1.5);
+        ddaBg.append('text').attr('x', cx).attr('y', cy - maxR - 6).attr('text-anchor', 'middle')
+          .attr('font-size', 10).attr('font-weight', 700).attr('letter-spacing', '0.08em')
+          .attr('fill', '#0b6cb5').attr('opacity', 0.7).text('DDA BOUNDARY');
+      }
+      // If user had bundling on before re-render, re-apply it once layout settles
+      if(graphBundleOn) runBundle();
     });
+
+  // Bundle helpers (scoped to this render so they close over linkSel, edges, nodeById)
+  function runBundle(){
+    const btn = document.getElementById('g-bundle');
+    btn.textContent = '⏳ Bundling…';
+    btn.disabled = true;
+    // Defer so the browser can paint the disabled state before the CPU spike
+    setTimeout(() => {
+      try{ fdebBundle(edges, nodeById); }
+      catch(e){ console.warn('bundle failed', e); }
+      linkSel.attr('d', linkD);
+      btn.textContent = '≋ Bundled';
+      btn.classList.add('active');
+      btn.disabled = false;
+    }, 30);
+  }
+  function clearBundle(){
+    fdebClear(edges);
+    linkSel.attr('d', linkD);
+    const btn = document.getElementById('g-bundle');
+    btn.textContent = '≋ Bundle';
+    btn.classList.remove('active');
+  }
 
   graphSim = sim;
   // Force-stop after 8s to save CPU
@@ -1473,7 +1606,22 @@ function renderGraph(){
       graphRotateAngle = 0;
     }
   });
+  const bundleBtn = ctlBtn('g-bundle');
+  bundleBtn.classList.toggle('active', graphBundleOn);
+  bundleBtn.textContent = graphBundleOn ? '≋ Bundled' : '≋ Bundle';
+  bundleBtn.addEventListener('click', () => {
+    graphBundleOn = !graphBundleOn;
+    if(graphBundleOn){
+      // If sim hasn't ended yet, freeze it first so bundle has stable coords
+      sim.alphaTarget(0).stop();
+      runBundle();
+    } else {
+      clearBundle();
+    }
+  });
   ctlBtn('g-reheat').addEventListener('click', () => {
+    // Reheat invalidates bundle (positions will change)
+    if(graphBundleOn){ graphBundleOn = false; clearBundle(); }
     sim.alpha(0.9).restart();
     setTimeout(() => sim.alphaTarget(0), 6000);
   });

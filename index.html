@@ -150,6 +150,30 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .graph-tip .tt-label{color:#97a3b2;font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
 .graph-tip .tt-val{color:#fff;font-weight:500}
 
+/* Hover ego-network highlighting */
+.gnode.faded{opacity:.12}
+.glink.faded{stroke-opacity:.04 !important}
+.glink.lit{stroke-opacity:.95 !important;stroke-width:2.5 !important}
+.gnode.lit{stroke:#16202e !important;stroke-width:2.5 !important}
+.gnode.pulse{transform-origin:center center;transform-box:fill-box}
+.gnode-recent{animation:nodepulse 2.2s ease-in-out infinite}
+@keyframes nodepulse{
+  0%,100%{filter:drop-shadow(0 0 0 rgba(217,119,6,0))}
+  50%{filter:drop-shadow(0 0 6px rgba(217,119,6,.85))}
+}
+
+/* Persistent hub label + hover label */
+.glabel{font-family:'Inter',sans-serif;font-size:10px;font-weight:600;fill:#16202e;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+.glabel.dim{opacity:.55;font-weight:500;font-size:9px}
+.ghover-label{font-family:'Inter',sans-serif;font-size:11px;font-weight:600;fill:#0b6cb5;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+
+/* Graph control buttons (rotate/reset) */
+.graph-controls{position:absolute;top:14px;left:14px;display:flex;gap:6px;z-index:401}
+.graph-controls button{appearance:none;background:rgba(255,255,255,.96);border:1px solid var(--border-2);border-radius:8px;color:var(--muted);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;box-shadow:var(--shadow);transition:all .12s}
+.graph-controls button:hover{color:var(--accent);border-color:var(--accent)}
+.graph-controls button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.graph-controls .ico{display:inline-block;width:10px;height:10px}
+
 .footer{font-size:11px;color:var(--dim);text-align:center;padding:12px;font-weight:500;border-top:1px solid var(--border);margin-top:auto}
 .footer a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--dim)}
 .footer a:hover{color:var(--accent)}
@@ -234,7 +258,14 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
     </div>
     <div class="body" style="padding:0">
       <div id="map"></div>
-      <div id="graph"><svg></svg></div>
+      <div id="graph">
+        <svg></svg>
+        <div class="graph-controls" id="graph-controls" style="display:none">
+          <button id="g-rotate" title="Toggle slow rotation">↻ Rotate</button>
+          <button id="g-reheat" title="Reheat the simulation">↯ Reheat</button>
+          <button id="g-reset" title="Reset zoom &amp; layout">⤢ Reset</button>
+        </div>
+      </div>
       <div class="legend" id="map-legend">
         <div class="lg-section">Permits</div>
         <div><span style="background:#16a34a"></span>Active / Issued</div>
@@ -353,6 +384,10 @@ const layerOn = { permits:true, county:true, cip:true, dda:true };
 let activeView = 'map';                     // 'map' | 'graph'
 let graphSim = null;
 let graphState = null;                      // last built {nodes,edges,typeColors}
+let graphRotate = false;
+let graphRotateRAF = null;
+let graphRotateAngle = 0;
+let graphZoomBehavior = null;
 
 // =====================================================================
 // HELPERS
@@ -1050,32 +1085,72 @@ function renderGraph(){
   }
 
   const colorOf = n => n.kind === 'cip' ? '#0891b2' : (typeColors.get(n.type) || '#94a3b8');
-  const radiusOf = n => n.kind === 'cip' ? 7 : Math.max(3, Math.min(11, 3 + Math.sqrt(n.degree)));
+  const radiusOf = n => n.kind === 'cip' ? 7 : Math.max(3, Math.min(12, 3 + Math.sqrt(n.degree)));
 
-  const g = svgSel.append('g').attr('class', 'gz');
-  svgSel.call(d3.zoom().scaleExtent([0.2, 6]).on('zoom', e => g.attr('transform', e.transform)));
+  // Layered structure: svg > zoom-layer > rotate-layer > contents
+  const zoomLayer = svgSel.append('g').attr('class', 'gz');
+  const rotateLayer = zoomLayer.append('g').attr('class', 'rot');
+  graphZoomBehavior = d3.zoom().scaleExtent([0.2, 6]).on('zoom', e => zoomLayer.attr('transform', e.transform));
+  svgSel.call(graphZoomBehavior);
 
-  // DDA halo group (light blue circle behind DDA-inside nodes — gives them a "cluster" feel)
-  const ddaBg = g.append('g').attr('class', 'dda-halo');
+  // DDA halo (drawn first, behind nodes)
+  const ddaBg = rotateLayer.append('g').attr('class', 'dda-halo');
 
-  const linkSel = g.append('g')
+  // Build adjacency for fast ego-network lookup
+  const adj = new Map();
+  edges.forEach((e, i) => {
+    const s = typeof e.source === 'object' ? e.source.id : e.source;
+    const t = typeof e.target === 'object' ? e.target.id : e.target;
+    if(!adj.has(s)) adj.set(s, { nbrs: new Set(), edges: new Set() });
+    if(!adj.has(t)) adj.set(t, { nbrs: new Set(), edges: new Set() });
+    adj.get(s).nbrs.add(t); adj.get(s).edges.add(i);
+    adj.get(t).nbrs.add(s); adj.get(t).edges.add(i);
+  });
+
+  const linkSel = rotateLayer.append('g')
     .attr('stroke-opacity', 0.35)
     .selectAll('line')
     .data(edges)
     .enter().append('line')
       .attr('class', 'glink')
+      .attr('data-i', (d, i) => i)
       .attr('stroke', d => d.kind === 'folio' ? '#0b6cb5' : d.kind === 'address' ? '#0891b2' : '#cbd5e1')
       .attr('stroke-width', d => d.weight * 0.55);
 
-  const nodeSel = g.append('g')
+  // Recent: permits issued in last 30 days
+  const recentCutoff = Date.now() - 30 * 24 * 3600 * 1000;
+  const isRecent = n => n.kind === 'permit' && n.date && n.date >= recentCutoff;
+
+  const nodeSel = rotateLayer.append('g')
     .selectAll('circle')
     .data(nodes)
     .enter().append('circle')
-      .attr('class', d => 'gnode' + (d.inDDA ? ' gnode-dda' : ''))
+      .attr('class', d => 'gnode' + (d.inDDA ? ' gnode-dda' : '') + (isRecent(d) ? ' gnode-recent' : ''))
+      .attr('data-id', d => d.id)
       .attr('r', radiusOf)
       .attr('fill', colorOf)
       .attr('stroke', d => d.inDDA ? '#0b6cb5' : '#ffffff')
       .attr('stroke-width', d => d.inDDA ? 2 : 1);
+
+  // Persistent hub labels: top 15 by degree
+  const hubNodes = nodes.slice().sort((a, b) => b.degree - a.degree).slice(0, 15).filter(n => n.degree > 0);
+  const hubIds = new Set(hubNodes.map(n => n.id));
+  const hubLabelText = n => {
+    const raw = n.kind === 'cip' ? (n.address || 'CIP') : (n.address || n.number || '');
+    const short = String(raw).split(',')[0].slice(0, 28);
+    return short || n.type;
+  };
+  const labelSel = rotateLayer.append('g').attr('class', 'hub-labels')
+    .selectAll('text')
+    .data(hubNodes)
+    .enter().append('text')
+      .attr('class', 'glabel')
+      .attr('text-anchor', 'middle')
+      .attr('dy', d => -(radiusOf(d) + 5))
+      .text(hubLabelText);
+
+  // Hover-only floating label (single SVG <text>, reused)
+  const hoverLabel = rotateLayer.append('text').attr('class', 'ghover-label').attr('text-anchor', 'middle').style('display', 'none');
 
   // Tooltip
   const tip = document.getElementById('graph-tip');
@@ -1096,13 +1171,37 @@ function renderGraph(){
     tip.style.top = ty + 'px';
   };
   const hideTip = () => tip.classList.remove('show');
-  nodeSel.on('mousemove', showTip).on('mouseleave', hideTip);
+
+  // Ego-network highlight on hover: fade everything not connected
+  const highlightEgo = (d) => {
+    const a = adj.get(d.id);
+    const litNodes = new Set([d.id]);
+    const litEdges = new Set();
+    if(a){ a.nbrs.forEach(n => litNodes.add(n)); a.edges.forEach(i => litEdges.add(i)); }
+    nodeSel.classed('faded', n => !litNodes.has(n.id))
+           .classed('lit', n => n.id === d.id);
+    linkSel.classed('faded', (_, i) => !litEdges.has(i))
+           .classed('lit', (_, i) => litEdges.has(i));
+    // Show hover label on the hovered node (skip if it's already a hub-labeled node)
+    if(!hubIds.has(d.id)){
+      hoverLabel.style('display', '')
+        .attr('x', d.x).attr('y', d.y - radiusOf(d) - 6)
+        .text(hubLabelText(d));
+    }
+  };
+  const clearHighlight = () => {
+    nodeSel.classed('faded', false).classed('lit', false);
+    linkSel.classed('faded', false).classed('lit', false);
+    hoverLabel.style('display', 'none');
+  };
+
+  nodeSel.on('mousemove', showTip).on('mouseleave', (ev, d) => { hideTip(); clearHighlight(); });
+  nodeSel.on('mouseenter', (ev, d) => highlightEgo(d));
   nodeSel.on('click', (ev, d) => {
-    if(!d._f || !d.lat || !d.lng) return;
+    if(!d.lat || !d.lng) return;
     activateView('map');
     map.setView([d.lat, d.lng], 18);
-    if(d.kind === 'permit' && permitLayer){
-      // Find marker and open popup
+    if(d.kind === 'permit'){
       const targetLayer = d.source === 'county' ? countyLayer : permitLayer;
       targetLayer?.eachLayer(l => {
         const ll = l.getLatLng();
@@ -1139,6 +1238,7 @@ function renderGraph(){
     .on('tick', () => {
       linkSel.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
       nodeSel.attr('cx', d => d.x).attr('cy', d => d.y);
+      labelSel.attr('x', d => d.x).attr('y', d => d.y - radiusOf(d) - 5);
     })
     .on('end', () => {
       // Draw a soft DDA halo around the centroid of DDA-inside nodes
@@ -1159,6 +1259,61 @@ function renderGraph(){
   graphSim = sim;
   // Force-stop after 8s to save CPU
   setTimeout(() => { sim.alphaTarget(0); }, 8000);
+
+  // Rotation: spin the inner layer around the canvas center
+  if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
+  const tickRotate = () => {
+    if(!graphRotate || activeView !== 'graph') return;
+    graphRotateAngle = (graphRotateAngle + 0.08) % 360;
+    rotateLayer.attr('transform', `rotate(${graphRotateAngle} ${w/2} ${h/2})`);
+    // Counter-rotate labels so they stay readable
+    labelSel.attr('transform', d => `rotate(${-graphRotateAngle} ${d.x} ${d.y})`);
+    hoverLabel.attr('transform', function(){
+      const x = +this.getAttribute('x') || 0, y = +this.getAttribute('y') || 0;
+      return `rotate(${-graphRotateAngle} ${x} ${y})`;
+    });
+    graphRotateRAF = requestAnimationFrame(tickRotate);
+  };
+  if(graphRotate) tickRotate();
+
+  // Wire control buttons (idempotent — replace listeners each render via cloneNode-style reset)
+  const ctlBtn = (id) => {
+    const old = document.getElementById(id);
+    const fresh = old.cloneNode(true);
+    old.parentNode.replaceChild(fresh, old);
+    return fresh;
+  };
+  const rotBtn = ctlBtn('g-rotate');
+  rotBtn.classList.toggle('active', graphRotate);
+  rotBtn.addEventListener('click', () => {
+    graphRotate = !graphRotate;
+    rotBtn.classList.toggle('active', graphRotate);
+    if(graphRotate){ tickRotate(); }
+    else {
+      if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
+      rotateLayer.attr('transform', null);
+      labelSel.attr('transform', null);
+      hoverLabel.attr('transform', null);
+      graphRotateAngle = 0;
+    }
+  });
+  ctlBtn('g-reheat').addEventListener('click', () => {
+    sim.alpha(0.9).restart();
+    setTimeout(() => sim.alphaTarget(0), 6000);
+  });
+  ctlBtn('g-reset').addEventListener('click', () => {
+    svgSel.transition().duration(450).call(graphZoomBehavior.transform, d3.zoomIdentity);
+    if(graphRotate){
+      graphRotate = false;
+      document.getElementById('g-rotate').classList.remove('active');
+      if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
+      rotateLayer.attr('transform', null);
+      labelSel.attr('transform', null);
+      graphRotateAngle = 0;
+    }
+    sim.alpha(0.7).restart();
+    setTimeout(() => sim.alphaTarget(0), 5000);
+  });
 }
 
 function activateView(v){
@@ -1172,12 +1327,14 @@ function activateView(v){
   const graphStats = document.getElementById('graph-stats');
   const mapToggles = document.getElementById('map-layer-toggles');
   const title = document.getElementById('view-title');
+  const graphControls = document.getElementById('graph-controls');
   if(v === 'graph'){
     mapEl.classList.add('hidden');
     graphEl.classList.add('active');
     mapLegend.style.display = 'none';
     graphLegend.style.display = '';
     graphStats.style.display = '';
+    graphControls.style.display = '';
     mapToggles.style.display = 'none';
     title.textContent = 'Permit Network Graph';
     renderGraph();
@@ -1187,8 +1344,10 @@ function activateView(v){
     mapLegend.style.display = '';
     graphLegend.style.display = 'none';
     graphStats.style.display = 'none';
+    graphControls.style.display = 'none';
     mapToggles.style.display = '';
     title.textContent = 'Geographic Distribution';
+    if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
     setTimeout(() => map?.invalidateSize(), 50);
   }
 }

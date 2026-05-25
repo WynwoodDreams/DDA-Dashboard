@@ -150,11 +150,18 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .graph-tip .tt-label{color:#97a3b2;font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
 .graph-tip .tt-val{color:#fff;font-weight:500}
 
-/* Hover ego-network highlighting */
+/* Hover / pin ego-network highlighting */
 .gnode.faded{opacity:.12}
 .glink.faded{stroke-opacity:.04 !important}
 .glink.lit{stroke-opacity:.95 !important;stroke-width:2.5 !important}
 .gnode.lit{stroke:#16202e !important;stroke-width:2.5 !important}
+.gnode.pinned{stroke:#0b6cb5 !important;stroke-width:3.5 !important;filter:drop-shadow(0 0 5px rgba(11,108,181,.9))}
+.graph-tip.pinned{pointer-events:auto;border:1px solid #0b6cb5}
+.graph-tip .tt-actions{margin-top:8px;display:flex;gap:6px}
+.graph-tip .tt-btn{appearance:none;background:#0b6cb5;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;letter-spacing:.02em}
+.graph-tip .tt-btn.secondary{background:#3a4656}
+.graph-tip .tt-btn:hover{background:#0a5d9c}
+.graph-tip .tt-pinned-tag{display:inline-block;background:#0b6cb5;color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.05em;margin-left:6px}
 .gnode.pulse{transform-origin:center center;transform-box:fill-box}
 .gnode-recent{animation:nodepulse 2.2s ease-in-out infinite}
 @keyframes nodepulse{
@@ -388,6 +395,7 @@ let graphRotate = false;
 let graphRotateRAF = null;
 let graphRotateAngle = 0;
 let graphZoomBehavior = null;
+let pinnedNodeId = null;
 
 // =====================================================================
 // HELPERS
@@ -1154,61 +1162,119 @@ function renderGraph(){
 
   // Tooltip
   const tip = document.getElementById('graph-tip');
-  const showTip = (ev, d) => {
+  const nodeById = new Map(nodes.map(n => [n.id, n]));
+
+  const renderTipBody = (d, pinned) => {
     const src = d.kind === 'cip' ? 'CIP' : (d.source === 'county' ? 'Miami-Dade Co.' : 'City of Miami');
-    tip.innerHTML = `
-      <div class="tt-label">${src}${d.inDDA ? ' · IN DDA' : ''}</div>
+    const pinTag = pinned ? '<span class="tt-pinned-tag">PINNED</span>' : '';
+    const actions = pinned
+      ? `<div class="tt-actions">
+           ${d.lat ? `<button class="tt-btn" data-act="map">View on Map</button>` : ''}
+           <button class="tt-btn secondary" data-act="unpin">Unpin</button>
+         </div>`
+      : '';
+    return `
+      <div class="tt-label">${src}${d.inDDA ? ' · IN DDA' : ''}${pinTag}</div>
       <div class="tt-val" style="margin:2px 0 6px;font-weight:600">${d.number || d.address || ''}</div>
       <div class="tt-label">Type</div><div class="tt-val">${d.type}</div>
       ${d.status ? `<div class="tt-label" style="margin-top:4px">Status</div><div class="tt-val">${d.status}</div>` : ''}
       ${d.date ? `<div class="tt-label" style="margin-top:4px">Date</div><div class="tt-val">${fmtDate(d.date)}</div>` : ''}
-      <div class="tt-label" style="margin-top:4px">Connections</div><div class="tt-val">${d.degree}</div>`;
-    tip.classList.add('show');
+      <div class="tt-label" style="margin-top:4px">Connections</div><div class="tt-val">${d.degree}</div>
+      ${actions}`;
+  };
+
+  const positionTip = (clientX, clientY) => {
     const rect = document.getElementById('graph').getBoundingClientRect();
-    const tx = Math.min(rect.width - 280, ev.clientX - rect.left + 14);
-    const ty = Math.min(rect.height - 140, ev.clientY - rect.top + 14);
+    const tx = Math.min(rect.width - 280, clientX - rect.left + 14);
+    const ty = Math.min(rect.height - 200, clientY - rect.top + 14);
     tip.style.left = tx + 'px';
     tip.style.top = ty + 'px';
   };
-  const hideTip = () => tip.classList.remove('show');
 
-  // Ego-network highlight on hover: fade everything not connected
-  const highlightEgo = (d) => {
+  const showTip = (ev, d) => {
+    if(pinnedNodeId) return; // pin takes priority — don't overwrite tip while pinned
+    tip.innerHTML = renderTipBody(d, false);
+    tip.classList.add('show');
+    tip.classList.remove('pinned');
+    positionTip(ev.clientX, ev.clientY);
+  };
+  const hideTip = () => { if(!pinnedNodeId) tip.classList.remove('show'); };
+
+  // Wire actions on the tip (delegated, attached once)
+  tip.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-act]');
+    if(!btn) return;
+    const act = btn.dataset.act;
+    if(act === 'unpin'){ setPin(null); }
+    else if(act === 'map' && pinnedNodeId){
+      const d = nodeById.get(pinnedNodeId);
+      if(d && d.lat){
+        activateView('map');
+        map.setView([d.lat, d.lng], 18);
+        const targetLayer = d.source === 'county' ? countyLayer : permitLayer;
+        targetLayer?.eachLayer(l => {
+          const ll = l.getLatLng();
+          if(Math.abs(ll.lat - d.lat) < 1e-6 && Math.abs(ll.lng - d.lng) < 1e-6) l.openPopup();
+        });
+      }
+    }
+  });
+
+  // Ego-network highlight: shared by hover + pin
+  const applyEgo = (d) => {
     const a = adj.get(d.id);
     const litNodes = new Set([d.id]);
     const litEdges = new Set();
     if(a){ a.nbrs.forEach(n => litNodes.add(n)); a.edges.forEach(i => litEdges.add(i)); }
     nodeSel.classed('faded', n => !litNodes.has(n.id))
-           .classed('lit', n => n.id === d.id);
+           .classed('lit', n => litNodes.has(n.id) && n.id !== d.id)
+           .classed('pinned', n => n.id === d.id && pinnedNodeId === d.id);
     linkSel.classed('faded', (_, i) => !litEdges.has(i))
            .classed('lit', (_, i) => litEdges.has(i));
-    // Show hover label on the hovered node (skip if it's already a hub-labeled node)
     if(!hubIds.has(d.id)){
       hoverLabel.style('display', '')
         .attr('x', d.x).attr('y', d.y - radiusOf(d) - 6)
         .text(hubLabelText(d));
+    } else {
+      hoverLabel.style('display', 'none');
     }
   };
-  const clearHighlight = () => {
-    nodeSel.classed('faded', false).classed('lit', false);
+  const clearEgo = () => {
+    nodeSel.classed('faded', false).classed('lit', false).classed('pinned', false);
     linkSel.classed('faded', false).classed('lit', false);
     hoverLabel.style('display', 'none');
   };
 
-  nodeSel.on('mousemove', showTip).on('mouseleave', (ev, d) => { hideTip(); clearHighlight(); });
-  nodeSel.on('mouseenter', (ev, d) => highlightEgo(d));
-  nodeSel.on('click', (ev, d) => {
-    if(!d.lat || !d.lng) return;
-    activateView('map');
-    map.setView([d.lat, d.lng], 18);
-    if(d.kind === 'permit'){
-      const targetLayer = d.source === 'county' ? countyLayer : permitLayer;
-      targetLayer?.eachLayer(l => {
-        const ll = l.getLatLng();
-        if(Math.abs(ll.lat - d.lat) < 1e-6 && Math.abs(ll.lng - d.lng) < 1e-6) l.openPopup();
-      });
+  // Pin / unpin
+  const setPin = (id) => {
+    pinnedNodeId = id;
+    if(id){
+      const d = nodeById.get(id);
+      if(!d){ pinnedNodeId = null; return; }
+      applyEgo(d);
+      tip.innerHTML = renderTipBody(d, true);
+      tip.classList.add('show', 'pinned');
+      // Position tip in screen coords above the node — convert via current zoom transform
+      const t = d3.zoomTransform(svgSel.node());
+      const cx = t.applyX(d.x), cy = t.applyY(d.y);
+      const rect = document.getElementById('graph').getBoundingClientRect();
+      tip.style.left = Math.min(rect.width - 280, cx + 16) + 'px';
+      tip.style.top  = Math.min(rect.height - 200, cy + 16) + 'px';
+    } else {
+      tip.classList.remove('pinned', 'show');
+      clearEgo();
     }
+  };
+
+  nodeSel.on('mousemove', (ev, d) => { if(!pinnedNodeId) showTip(ev, d); });
+  nodeSel.on('mouseenter', (ev, d) => { if(!pinnedNodeId) applyEgo(d); });
+  nodeSel.on('mouseleave', (ev, d) => { if(!pinnedNodeId){ hideTip(); clearEgo(); } });
+  nodeSel.on('click', (ev, d) => {
+    ev.stopPropagation();
+    setPin(pinnedNodeId === d.id ? null : d.id);
   });
+  // Click on the SVG background unpins
+  svgSel.on('click', () => { if(pinnedNodeId) setPin(null); });
 
   // Drag behavior
   nodeSel.call(d3.drag()

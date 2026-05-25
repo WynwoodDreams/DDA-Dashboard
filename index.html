@@ -218,13 +218,91 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .footer a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--dim)}
 .footer a:hover{color:var(--accent)}
 
+/* ==================================================================== */
+/* PHASE 7 · THREE-COLUMN WORKSPACE SHELL                                */
+/* ==================================================================== */
+.workspace{display:grid;grid-template-columns:240px 1fr 320px;gap:14px;min-height:620px}
+
+/* Side rails */
+.rail{display:flex;flex-direction:column;gap:14px;min-height:0;background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:14px;overflow-y:auto;max-height:calc(100vh - 200px)}
+.rail::-webkit-scrollbar{width:6px;background:transparent}
+.rail::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px}
+.rail-group{display:flex;flex-direction:column;gap:7px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.rail-group:last-child{border-bottom:0;padding-bottom:0}
+.rail-label{font-size:9px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:3px}
+
+/* Large two-column view toggle */
+.view-toggle.vt-large{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--panel-2);border:1px solid var(--border-2);border-radius:10px;padding:3px;width:100%}
+.view-toggle.vt-large button{padding:9px 6px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:6px;border-radius:7px}
+.view-toggle.vt-large .vt-ico{font-size:14px;opacity:.6}
+.view-toggle.vt-large button.active .vt-ico{opacity:1}
+
+/* Vertical layer toggles */
+.layer-toggles.vert{display:flex;flex-direction:column;gap:3px}
+.layer-toggles.vert .toggle{padding:7px 11px;border-radius:8px;font-size:11px;justify-content:flex-start;width:100%;background:transparent;border-color:transparent}
+.layer-toggles.vert .toggle:hover{background:var(--panel-2)}
+.layer-toggles.vert .toggle.active{background:var(--panel-2);border-color:var(--border)}
+
+/* Rail-scoped fields */
+.rail .field{gap:3px}
+.rail .field label{font-size:10px}
+.rail .field select,.rail .field input{min-width:0;width:100%;font-size:12px;padding:7px 11px}
+
+/* Full-width and ghost buttons */
+.btn.btn-full{width:100%;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted);font-weight:500;justify-content:flex-start;padding:8px 11px}
+.btn.btn-ghost:hover{background:var(--panel-2);color:var(--accent);border-color:var(--accent)}
+
+/* Source badges */
+.src-badge{display:flex;align-items:center;font-size:11px;color:var(--muted);padding:3px 0}
+.src-badge span{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;flex-shrink:0}
+
+/* STAGE (center column) */
+.stage{display:flex;flex-direction:column;min-height:580px;overflow:hidden;border:1px solid var(--border);border-radius:12px;background:var(--panel);box-shadow:var(--shadow);position:relative}
+.stage-head{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-end;background:linear-gradient(180deg,#fbfcfd 0%,transparent 100%);flex-shrink:0;gap:14px}
+.stage-title{min-width:0;display:flex;flex-direction:column;gap:3px}
+.stage-eyebrow{display:inline-block;font-size:9px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.14em}
+.stage-head h1{font-size:18px;font-weight:700;letter-spacing:-.02em;color:var(--text);line-height:1.2}
+.stage-meta{font-size:11px;color:var(--muted);font-weight:500;text-align:right;flex-shrink:0;white-space:nowrap}
+.stage-meta b{color:var(--accent);font-family:var(--mono);font-weight:600}
+.stage-body{flex:1;position:relative;min-height:0;overflow:hidden;border-radius:0 0 12px 12px}
+
+/* RIGHT RAIL · vertical KPIs + compact charts */
+.kpi-stack{display:flex;flex-direction:column;gap:8px}
+.kpi-stack .kpi{padding:11px 13px;border-radius:10px}
+.kpi-stack .kpi::before{width:3px}
+.kpi-stack .kpi .label{font-size:9px;margin-bottom:6px;letter-spacing:.06em}
+.kpi-stack .kpi .value{font-size:22px;letter-spacing:-.01em}
+.kpi-stack .kpi .delta{font-size:9px;margin-top:5px}
+.kpi-stack .kpi.kpi-small{padding:8px 13px}
+.kpi-stack .kpi.kpi-small .value{font-size:15px}
+.kpi-stack .kpi.kpi-small .label{margin-bottom:3px}
+
+.rail-panel{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.rail-panel-head{font-size:11px;font-weight:600;color:var(--text);display:flex;justify-content:space-between;align-items:center}
+.rail-panel-head .tag{font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;background:#fff;border:1px solid var(--border);padding:2px 7px;border-radius:12px}
+.chart-wrap.rail-chart{height:160px;min-height:0}
+
+/* Toast notification */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:#16202e;color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;font-weight:500;box-shadow:var(--shadow-lg);z-index:9999;opacity:0;transition:all .25s ease-out;pointer-events:none;letter-spacing:.01em}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:1400px){
+  .workspace{grid-template-columns:220px 1fr 290px}
+}
+@media (max-width:1200px){
+  .workspace{grid-template-columns:200px 1fr 270px}
+  .stage-head h1{font-size:16px}
+}
+@media (max-width:1024px){
+  .workspace{grid-template-columns:1fr}
+  .rail{max-height:none;overflow-y:visible}
+  .stage{min-height:480px}
+}
+
 @media (max-width:1100px){
-  .grid{grid-template-columns:1fr}
-  .kpis{grid-template-columns:repeat(2,1fr)}
   .bottom{grid-template-columns:1fr}
   #map{min-height:400px}
-  .field select,.field input{min-width:140px}
-  .field input{min-width:160px}
 }
 </style>
 </head>
@@ -245,58 +323,79 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
   </div>
 </header>
 
-<section class="kpis">
-  <div class="kpi"><div class="label">DDA Area</div><div class="value" id="kpi-area">--</div><div class="delta">Sq Miles</div></div>
-  <div class="kpi"><div class="label">DDA Permits</div><div class="value" id="kpi-permits">--</div><div class="delta" id="kpi-permits-sub">+ Nearby County</div></div>
-  <div class="kpi"><div class="label">DDA Investment</div><div class="value" id="kpi-invest">--</div><div class="delta" id="kpi-invest-sub">Declared Permit Value</div></div>
-  <div class="kpi"><div class="label">Last 30 Days</div><div class="value" id="kpi-30d">--</div><div class="delta" id="kpi-30d-sub">New Activity</div></div>
-  <div class="kpi"><div class="label">CIP Pipeline</div><div class="value" id="kpi-cip">--</div><div class="delta" id="kpi-cip-sub">Capital Improvement</div></div>
-</section>
+<main class="workspace">
 
-<section class="filterbar">
-  <div class="field">
-    <label for="f-status">Status</label>
-    <select id="f-status"><option value="">All statuses</option></select>
-  </div>
-  <div class="field">
-    <label for="f-type">Application Type</label>
-    <select id="f-type"><option value="">All types</option></select>
-  </div>
-  <div class="field">
-    <label for="f-time">Time Window</label>
-    <select id="f-time">
-      <option value="0">All time</option>
-      <option value="30">Last 30 days</option>
-      <option value="90">Last 90 days</option>
-      <option value="365">Last 12 months</option>
-    </select>
-  </div>
-  <div class="field">
-    <label for="f-search">Search Address / Permit #</label>
-    <input id="f-search" type="text" placeholder="e.g. Biscayne Blvd or BD2024…" autocomplete="off">
-  </div>
-  <button class="btn" id="f-reset">Reset</button>
-  <div class="filter-result" id="f-result">--</div>
-</section>
-
-<section class="grid">
-  <div class="panel">
-    <div class="head">
-      <h3 id="view-title">Geographic Distribution</h3>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <div class="view-toggle" id="view-toggle">
-          <button data-view="map" class="active">Map</button>
-          <button data-view="graph">Network</button>
-        </div>
-        <div class="layer-toggles" id="map-layer-toggles">
-          <span class="toggle active" data-layer="permits"><span class="swatch" style="background:var(--good)"></span>City Permits</span>
-          <span class="toggle active" data-layer="county"><span class="swatch" style="background:#8b5cf6"></span>County</span>
-          <span class="toggle active" data-layer="cip"><span class="swatch" style="background:var(--cyan)"></span>CIP</span>
-          <span class="toggle active" data-layer="dda"><span class="swatch" style="background:var(--accent);border-radius:2px"></span>DDA</span>
-        </div>
+  <!-- ============ LEFT RAIL · TOOLS ============ -->
+  <aside class="rail rail-l">
+    <div class="rail-group">
+      <div class="rail-label">View</div>
+      <div class="view-toggle vt-large" id="view-toggle">
+        <button data-view="map" class="active"><span class="vt-ico">⌖</span>Map</button>
+        <button data-view="graph"><span class="vt-ico">⧬</span>Network</button>
       </div>
     </div>
-    <div class="body" style="padding:0">
+
+    <div class="rail-group">
+      <div class="rail-label">Layers</div>
+      <div class="layer-toggles vert" id="map-layer-toggles">
+        <span class="toggle active" data-layer="permits"><span class="swatch" style="background:var(--good)"></span>City Permits</span>
+        <span class="toggle active" data-layer="county"><span class="swatch" style="background:#8b5cf6"></span>County Permits</span>
+        <span class="toggle active" data-layer="cip"><span class="swatch" style="background:var(--cyan)"></span>CIP Projects</span>
+        <span class="toggle active" data-layer="dda"><span class="swatch" style="background:var(--accent);border-radius:2px"></span>DDA Boundary</span>
+      </div>
+    </div>
+
+    <div class="rail-group">
+      <div class="rail-label">Filters</div>
+      <div class="field">
+        <label for="f-search">Search</label>
+        <input id="f-search" type="text" placeholder="Address or permit #" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="f-status">Status</label>
+        <select id="f-status"><option value="">All statuses</option></select>
+      </div>
+      <div class="field">
+        <label for="f-type">Type</label>
+        <select id="f-type"><option value="">All types</option></select>
+      </div>
+      <div class="field">
+        <label for="f-time">Time Window</label>
+        <select id="f-time">
+          <option value="0">All time</option>
+          <option value="30">Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last 12 months</option>
+        </select>
+      </div>
+      <button class="btn btn-full" id="f-reset">Reset filters</button>
+    </div>
+
+    <div class="rail-group">
+      <div class="rail-label">Actions</div>
+      <button class="btn btn-full btn-ghost" id="act-snapshot" title="Download a PNG snapshot of the current view">⌘ Snapshot view</button>
+      <button class="btn btn-full btn-ghost" id="act-export" title="Export the filtered permit set as CSV">↓ Export CSV</button>
+      <button class="btn btn-full btn-ghost" id="act-copy" title="Copy a link to the current filter state">⧉ Copy link</button>
+    </div>
+
+    <div class="rail-group rail-meta">
+      <div class="rail-label">Sources</div>
+      <div class="src-badge"><span style="background:#0b6cb5"></span>City of Miami</div>
+      <div class="src-badge"><span style="background:#8b5cf6"></span>Miami-Dade County</div>
+      <div class="src-badge"><span style="background:#0891b2"></span>CIP Projects</div>
+    </div>
+  </aside>
+
+  <!-- ============ CENTER STAGE ============ -->
+  <section class="stage panel">
+    <div class="stage-head">
+      <div class="stage-title">
+        <span class="stage-eyebrow" id="view-eyebrow">Base Layer</span>
+        <h1 id="view-title">Geographic Distribution</h1>
+      </div>
+      <div class="stage-meta" id="f-result">--</div>
+    </div>
+    <div class="stage-body">
       <div id="map"></div>
       <div id="graph">
         <svg></svg>
@@ -352,18 +451,29 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
       <div class="graph-tip" id="graph-tip"></div>
       <div id="map-loading" class="loading"><div class="loading-inner">Initializing</div></div>
     </div>
-  </div>
-  <div class="right-col">
-    <div class="panel">
-      <div class="head"><h3>Permit Status</h3><span class="tag" id="status-count">--</span></div>
-      <div class="body"><div class="chart-wrap"><canvas id="status-chart"></canvas></div></div>
+  </section>
+
+  <!-- ============ RIGHT RAIL · INTEL ============ -->
+  <aside class="rail rail-r">
+    <div class="kpi-stack">
+      <div class="kpi"><div class="label">DDA Permits</div><div class="value" id="kpi-permits">--</div><div class="delta" id="kpi-permits-sub">+ Nearby County</div></div>
+      <div class="kpi"><div class="label">DDA Investment</div><div class="value" id="kpi-invest">--</div><div class="delta" id="kpi-invest-sub">Declared Permit Value</div></div>
+      <div class="kpi"><div class="label">Last 30 Days</div><div class="value" id="kpi-30d">--</div><div class="delta" id="kpi-30d-sub">New Activity</div></div>
+      <div class="kpi"><div class="label">CIP Pipeline</div><div class="value" id="kpi-cip">--</div><div class="delta" id="kpi-cip-sub">Capital Improvement</div></div>
+      <div class="kpi kpi-small"><div class="label">DDA Area</div><div class="value" id="kpi-area">--</div><div class="delta">Square Miles</div></div>
     </div>
-    <div class="panel">
-      <div class="head"><h3>Top Application Types</h3><span class="tag">Category</span></div>
-      <div class="body"><div class="chart-wrap"><canvas id="type-chart"></canvas></div></div>
+
+    <div class="rail-panel">
+      <div class="rail-panel-head">Permit Status <span class="tag" id="status-count">--</span></div>
+      <div class="chart-wrap rail-chart"><canvas id="status-chart"></canvas></div>
     </div>
-  </div>
-</section>
+
+    <div class="rail-panel">
+      <div class="rail-panel-head">Top Application Types <span class="tag">Category</span></div>
+      <div class="chart-wrap rail-chart"><canvas id="type-chart"></canvas></div>
+    </div>
+  </aside>
+</main>
 
 <section class="bottom">
   <div class="panel">
@@ -2077,6 +2187,136 @@ function showError(title, detail){
     </div>`;
 }
 
+// =====================================================================
+// SIDEBAR ACTIONS · toast, CSV export, copy-link with URL hash state
+// =====================================================================
+function flashToast(msg, ms = 2200){
+  let el = document.getElementById('toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'toast';
+    el.className = 'toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function exportFilteredCSV(){
+  if(!view || !view.length){ flashToast('Nothing to export'); return; }
+  const rows = [['Date','Source','Permit #','Address','Type','Status','Value','Folio','Lat','Lng']];
+  view.forEach(f => {
+    const p = f.properties || {};
+    const v = getValuation(p);
+    const [lng, lat] = f.geometry?.coordinates || [];
+    rows.push([
+      fmtDate(pick(p, FIELDS.permitDate)),
+      f._source === 'county' ? 'Miami-Dade County' : 'City of Miami',
+      pick(p, FIELDS.number) || '',
+      pick(p, FIELDS.address) || '',
+      pick(p, FIELDS.permitType) || '',
+      pick(p, FIELDS.permitStatus) || '',
+      isFinite(v) && v > 0 ? v : '',
+      pick(p, FIELDS.folio) || '',
+      lat || '', lng || ''
+    ]);
+  });
+  const esc = c => `"${String(c ?? '').replace(/"/g, '""')}"`;
+  const csv = rows.map(r => r.map(esc).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `dda-permits-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  flashToast(`Exported ${view.length.toLocaleString()} permits`);
+}
+
+function copyShareLink(){
+  const state = {
+    s: filters.status, t: filters.type, d: filters.days, q: filters.q,
+    v: activeView,
+    l: Object.entries(layerOn).filter(([k,v]) => !v).map(([k]) => k).join(',')
+  };
+  const hash = '#' + btoa(JSON.stringify(state));
+  const url = window.location.origin + window.location.pathname + hash;
+  if(navigator.clipboard?.writeText){
+    navigator.clipboard.writeText(url).then(
+      () => flashToast('Link copied — preserves filters and view'),
+      () => { window.prompt('Copy this link:', url); }
+    );
+  } else {
+    window.prompt('Copy this link:', url);
+  }
+}
+
+function restoreStateFromHash(){
+  try{
+    if(!window.location.hash.startsWith('#')) return;
+    const raw = atob(window.location.hash.slice(1));
+    const st = JSON.parse(raw);
+    if(st.s !== undefined){ filters.status = st.s; document.getElementById('f-status').value = st.s; }
+    if(st.t !== undefined){ filters.type = st.t; document.getElementById('f-type').value = st.t; }
+    if(st.d !== undefined){ filters.days = st.d; document.getElementById('f-time').value = String(st.d); }
+    if(st.q !== undefined){ filters.q = st.q; document.getElementById('f-search').value = st.q; }
+    if(st.l){
+      st.l.split(',').filter(Boolean).forEach(k => {
+        if(k in layerOn){
+          layerOn[k] = false;
+          const t = document.querySelector(`.toggle[data-layer="${k}"]`);
+          if(t){ t.classList.remove('active'); t.classList.add('off'); }
+        }
+      });
+    }
+    if(st.v === 'graph') setTimeout(() => activateView('graph'), 100);
+  } catch(e){ console.warn('hash state restore failed', e); }
+}
+
+function snapshotView(){
+  if(activeView === 'graph'){
+    const svg = document.querySelector('#graph svg');
+    if(!svg){ flashToast('Graph not ready'); return; }
+    const w = svg.clientWidth, h = svg.clientHeight;
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', w); clone.setAttribute('height', h);
+    // Inline a minimal style so colors render off-page
+    const style = document.createElement('style');
+    style.textContent = `text{font-family:Inter,sans-serif} .glink{fill:none}`;
+    clone.insertBefore(style, clone.firstChild);
+    const xml = new XMLSerializer().serializeToString(clone);
+    const url = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+    const img = new Image();
+    img.onload = () => {
+      const cv = document.createElement('canvas');
+      cv.width = w * 2; cv.height = h * 2;     // 2x for retina
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#fbfcfd'; ctx.fillRect(0,0,cv.width,cv.height);
+      ctx.scale(2,2); ctx.drawImage(img, 0, 0);
+      cv.toBlob(b => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(b);
+        a.download = `dda-network-${new Date().toISOString().slice(0,10)}.png`;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+        flashToast('Network PNG saved');
+      });
+    };
+    img.onerror = () => flashToast('Snapshot failed — try Network view');
+    img.src = url;
+  } else {
+    flashToast('Map snapshot: use your OS screenshot for now');
+  }
+}
+
+function wireSidebarActions(){
+  document.getElementById('act-export').addEventListener('click', exportFilteredCSV);
+  document.getElementById('act-copy').addEventListener('click', copyShareLink);
+  document.getElementById('act-snapshot').addEventListener('click', snapshotView);
+}
+
 // Debug helper: run dumpSchema() in the browser console to see what fields
 // the endpoints actually return. Suggests likely valuation fields.
 window.dumpSchema = function(){
@@ -2160,6 +2400,8 @@ window.dumpSchema = function(){
     wireFilters();
     wireLayerToggles();
     wireViewToggle();
+    wireSidebarActions();
+    restoreStateFromHash();
     renderCIPMarkers();
     applyFilters();      // renders markers, KPIs, charts, table, count
 

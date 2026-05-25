@@ -292,7 +292,82 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .stage-head h1{font-size:18px;font-weight:700;letter-spacing:-.022em;color:var(--text);line-height:1.2}
 .stage-meta{font-size:11px;color:var(--muted);font-weight:500;text-align:right;flex-shrink:0;white-space:nowrap}
 .stage-meta b{color:var(--accent);font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
-.stage-body{flex:1;position:relative;min-height:0;overflow:hidden;border-radius:0 0 13px 13px}
+.stage-body{flex:1;position:relative;min-height:0;overflow:hidden;border-radius:0 0 13px 13px;background:var(--panel-2)}
+
+/* ============ "BASE LAYER" treatment · graph view only ============ */
+/* The Network view gets the dark teal + sacred-geometry + gold-ornament
+   treatment from the reference image. Map view stays neutral. */
+#graph{
+  background:
+    radial-gradient(circle at 50% 45%,#13415d 0%,#0a2638 85%) !important;
+}
+#graph::before{
+  content:'';
+  position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='156' viewBox='0 0 180 156'%3E%3Cg fill='none' stroke='%23c4912f' stroke-width='1'%3E%3Cpath d='M90 0 L180 45 L180 111 L90 156 L0 111 L0 45 Z' opacity='.55'/%3E%3Cpath d='M90 39 L135 61 L135 106 L90 128 L45 106 L45 61 Z' opacity='.75'/%3E%3Ccircle cx='90' cy='78' r='4' opacity='.85'/%3E%3Cpath d='M90 39 L90 128 M45 61 L135 106 M135 61 L45 106' opacity='.25'/%3E%3C/g%3E%3C/svg%3E");
+  background-size:240px 208px;
+  background-position:center;
+  opacity:.18;
+}
+#graph::after{
+  content:'';
+  position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M2 22 L2 2 L22 2' fill='none' stroke='%23c4912f' stroke-width='1.5' opacity='.7'/%3E%3Ccircle cx='6' cy='6' r='2' fill='%23c4912f' opacity='.85'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M38 22 L38 2 L18 2' fill='none' stroke='%23c4912f' stroke-width='1.5' opacity='.7'/%3E%3Ccircle cx='34' cy='6' r='2' fill='%23c4912f' opacity='.85'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M2 18 L2 38 L22 38' fill='none' stroke='%23c4912f' stroke-width='1.5' opacity='.7'/%3E%3Ccircle cx='6' cy='34' r='2' fill='%23c4912f' opacity='.85'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M38 18 L38 38 L18 38' fill='none' stroke='%23c4912f' stroke-width='1.5' opacity='.7'/%3E%3Ccircle cx='34' cy='34' r='2' fill='%23c4912f' opacity='.85'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:top 12px left 12px,top 12px right 12px,bottom 12px left 12px,bottom 12px right 12px;
+}
+#graph svg{position:relative;z-index:1}
+
+/* Graph overlays adapt to dark backdrop */
+#graph .legend,#graph .graph-stats,#graph .minimap{
+  background:rgba(8,30,44,.88)!important;
+  color:#cfe1ee!important;
+  border:1px solid rgba(196,145,47,.4)!important;
+  box-shadow:0 4px 16px rgba(0,0,0,.45)!important;
+  backdrop-filter:blur(6px)
+}
+#graph .legend .lg-section{color:#c4912f!important}
+#graph .legend div{color:#cfe1ee}
+#graph .graph-stats b{color:#fff!important}
+#graph .graph-stats{color:#9fb3c4!important}
+#graph .minimap .mm-label{color:#c4912f!important}
+#graph .scrubber{
+  background:rgba(8,30,44,.92)!important;
+  border-color:rgba(196,145,47,.4)!important;
+  box-shadow:0 4px 16px rgba(0,0,0,.45)!important;
+  backdrop-filter:blur(6px);
+  color:#cfe1ee
+}
+#graph .scrubber-head{color:#9fb3c4}
+#graph .scrubber-head .sc-range{color:#f4cf86!important}
+#graph .scrubber-head button{background:rgba(196,145,47,.12);border-color:rgba(196,145,47,.4);color:#f4cf86}
+#graph .scrubber-head button:hover{background:rgba(196,145,47,.25);color:#fff;border-color:#c4912f}
+#graph .scrubber-head button.active{background:#c4912f;color:#16202e;border-color:#c4912f}
+#graph .sc-track{fill:rgba(255,255,255,.06)!important}
+#graph .sc-bars rect{fill:rgba(196,145,47,.35)!important}
+#graph .sc-bars rect.in{fill:#c4912f!important}
+#graph .sc-axis text{fill:#9fb3c4!important}
+#graph .sc-axis line,#graph .sc-axis path{stroke:rgba(255,255,255,.15)!important}
+#graph .sc-selection{fill:rgba(196,145,47,.18)!important;stroke:#c4912f!important}
+#graph .sc-handle{fill:#c4912f!important}
+#graph .graph-controls button{background:rgba(8,30,44,.88)!important;border-color:rgba(196,145,47,.4)!important;color:#f4cf86!important;backdrop-filter:blur(6px)}
+#graph .graph-controls button:hover{background:rgba(196,145,47,.25)!important;color:#fff!important;border-color:#c4912f!important}
+#graph .graph-controls button.active{background:#c4912f!important;color:#16202e!important;border-color:#c4912f!important}
+
+/* DDA cluster halo glows gold on dark teal */
+#graph .dda-halo circle{stroke:#c4912f!important;stroke-opacity:.65!important;fill:#c4912f!important;fill-opacity:.06!important}
+#graph .dda-halo text{fill:#c4912f!important;opacity:.9!important}
+
+/* Network node strokes invert on dark */
+#graph .gnode{stroke:rgba(255,255,255,.7)}
+#graph .gnode-dda{stroke:#c4912f!important;filter:drop-shadow(0 0 4px rgba(196,145,47,.7))}
+#graph .glink{stroke:rgba(207,225,238,.35)}
+#graph .glabel{fill:#fff!important;stroke:rgba(8,30,44,.85)!important;stroke-width:3.5px!important}
+#graph .ghover-label{fill:#f4cf86!important;stroke:rgba(8,30,44,.85)!important;stroke-width:4px!important}
 
 /* RIGHT RAIL · vertical KPIs + compact charts */
 .kpi-stack{display:flex;flex-direction:column;gap:8px}

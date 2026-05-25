@@ -1364,7 +1364,7 @@ function renderGraph(){
       renderGraph();
     }
   };
-  applyTypeFilter();
+  // NOTE: applyTypeFilter() runs further down, after nodeSel/linkSel exist.
 
   const colorOf = n => n.kind === 'cip' ? '#0891b2' : (typeColors.get(n.type) || '#94a3b8');
   // Pre-compute log-value range for $ sizing mode
@@ -1438,6 +1438,9 @@ function renderGraph(){
       .attr('fill', colorOf)
       .attr('stroke', d => d.inDDA ? '#0b6cb5' : '#ffffff')
       .attr('stroke-width', d => d.inDDA ? 2 : 1);
+
+  // Now that nodeSel + linkSel exist, apply any persisted type filter
+  applyTypeFilter();
 
   // Persistent hub labels: top 15 by degree
   const hubNodes = nodes.slice().sort((a, b) => b.degree - a.degree).slice(0, 15).filter(n => n.degree > 0);

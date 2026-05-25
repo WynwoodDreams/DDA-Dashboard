@@ -310,6 +310,36 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .rail-panel-head .tag{font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;background:#fff;border:1px solid var(--border);padding:2px 7px;border-radius:12px}
 .chart-wrap.rail-chart{height:160px;min-height:0}
 
+/* INSIGHTS panel */
+.insights-panel{padding:11px 13px 4px}
+.ins-list{display:flex;flex-direction:column;margin:0 -13px -4px}
+.ins-item{padding:9px 13px;border-top:1px solid var(--border);display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;gap:1px 8px;align-items:baseline}
+.ins-item:first-child{border-top:0}
+.ins-item.ins-empty{display:block;text-align:center;color:var(--dim);font-size:11px;padding:14px;border-top:0}
+.ins-label{grid-column:1;grid-row:1;font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.03em}
+.ins-value{grid-column:2;grid-row:1;font-size:13px;color:var(--text);font-weight:700;font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em;text-align:right;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ins-value.ins-text{font-family:'Inter',sans-serif;font-size:11px;font-weight:600}
+.ins-sub{grid-column:1 / -1;grid-row:2;font-size:10px;color:var(--dim);letter-spacing:.01em}
+
+/* SELECTION panel */
+.selection-panel{padding:0;border:1px solid var(--accent);background:linear-gradient(180deg,#fff 0%,var(--accent-soft) 100%);box-shadow:0 0 0 3px rgba(10,90,150,.08),var(--shadow-md)}
+.selection-panel .rail-panel-head{padding:10px 13px;border-bottom:1px solid var(--border);background:#fff;color:var(--accent);font-weight:700}
+.sel-head-label{display:flex;align-items:center;gap:7px}
+.sel-source-badge{display:inline-block;background:var(--accent);color:#fff;font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.05em;text-transform:uppercase}
+.sel-close{appearance:none;background:transparent;border:0;color:var(--muted);font-size:14px;font-weight:600;cursor:pointer;padding:0 4px;line-height:1}
+.sel-close:hover{color:var(--bad)}
+#sel-body{padding:11px 13px;display:flex;flex-direction:column;gap:8px}
+.sel-num{font-size:13px;font-weight:700;color:var(--text);font-family:var(--mono);letter-spacing:-.01em;word-break:break-all}
+.sel-addr{font-size:11px;color:var(--muted);font-weight:500;line-height:1.4}
+.sel-pills{display:flex;gap:4px;flex-wrap:wrap;margin:2px 0 4px}
+.sel-pill{display:inline-block;font-size:9px;font-weight:600;padding:2px 7px;border-radius:10px;background:var(--panel-2);border:1px solid var(--border);color:var(--muted);letter-spacing:.02em;text-transform:uppercase;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sel-row{display:flex;justify-content:space-between;align-items:baseline;font-size:10px;border-top:1px solid var(--border);padding-top:5px}
+.sel-key{color:var(--muted);font-weight:500;letter-spacing:.02em}
+.sel-val{color:var(--text);font-weight:600;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sel-val.sel-money{color:var(--accent);font-size:11px}
+.sel-actions{display:flex;gap:5px;margin-top:4px}
+.sel-actions .btn{font-size:10px;padding:6px 10px}
+
 /* Toast notification */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:#16202e;color:#fff;padding:10px 18px;border-radius:8px;font-size:12px;font-weight:500;box-shadow:var(--shadow-lg);z-index:9999;opacity:0;transition:all .25s ease-out;pointer-events:none;letter-spacing:.01em}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
@@ -482,12 +512,27 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 
   <!-- ============ RIGHT RAIL · INTEL ============ -->
   <aside class="rail rail-r">
+    <div class="rail-panel selection-panel" id="selection-panel" style="display:none">
+      <div class="rail-panel-head">
+        <span class="sel-head-label">Selection <span class="sel-source-badge" id="sel-source">—</span></span>
+        <button class="sel-close" id="sel-close" title="Clear selection">✕</button>
+      </div>
+      <div id="sel-body"></div>
+    </div>
+
     <div class="kpi-stack">
       <div class="kpi"><div class="label">DDA Permits</div><div class="value" id="kpi-permits">--</div><div class="delta" id="kpi-permits-sub">+ Nearby County</div></div>
       <div class="kpi"><div class="label">DDA Investment</div><div class="value" id="kpi-invest">--</div><div class="delta" id="kpi-invest-sub">Declared Permit Value</div></div>
       <div class="kpi"><div class="label">Last 30 Days</div><div class="value" id="kpi-30d">--</div><div class="delta" id="kpi-30d-sub">New Activity</div></div>
       <div class="kpi"><div class="label">CIP Pipeline</div><div class="value" id="kpi-cip">--</div><div class="delta" id="kpi-cip-sub">Capital Improvement</div></div>
       <div class="kpi kpi-small"><div class="label">DDA Area</div><div class="value" id="kpi-area">--</div><div class="delta">Square Miles</div></div>
+    </div>
+
+    <div class="rail-panel insights-panel">
+      <div class="rail-panel-head">Insights <span class="tag">Live</span></div>
+      <div class="ins-list" id="insights-list">
+        <div class="ins-item ins-empty">Loading…</div>
+      </div>
     </div>
 
     <div class="rail-panel">
@@ -584,6 +629,7 @@ let graphRotateRAF = null;
 let graphRotateAngle = 0;
 let graphZoomBehavior = null;
 let pinnedNodeId = null;
+let _setGraphPin = null;               // bridge to renderGraph-scoped setPin so external buttons can clear pin
 const activeTypeFilter = new Set();   // empty = show all
 let graphBundleOn = false;
 let graphSizeByValue = false;          // false = size by degree, true = by $ value
@@ -619,6 +665,140 @@ function fmtMoney(n){
 function fmtMoneyFull(n){
   if(!isFinite(n) || n <= 0) return '—';
   return '$' + Math.round(n).toLocaleString();
+}
+
+// =====================================================================
+// INSIGHTS · computed metrics for right rail
+// =====================================================================
+function streetFromAddress(a){
+  if(!a) return null;
+  return String(a).replace(/^\d+\s*[-\w]*\s+/, '').split(',')[0].trim().toUpperCase();
+}
+function computeInsights(){
+  const inDDA = view.filter(f => f._inDDA !== false);
+  const byStreet = new Map();
+  const byType = new Map();
+  const values = [];
+  const now = Date.now();
+  const weekAgo = now - 7 * 86400000;
+  let newThisWeek = 0, newThisWeekVal = 0;
+  let mostRecentMs = 0;
+
+  inDDA.forEach(f => {
+    const p = f.properties || {};
+    const street = streetFromAddress(pick(p, FIELDS.address));
+    if(street) byStreet.set(street, (byStreet.get(street) || 0) + 1);
+    const type = pick(p, FIELDS.permitType);
+    if(type) byType.set(type, (byType.get(type) || 0) + 1);
+    const v = getValuation(p);
+    if(isFinite(v) && v > 0) values.push(v);
+    const ms = toMs(pick(p, FIELDS.permitDate));
+    if(!isNaN(ms)){
+      if(ms > mostRecentMs) mostRecentMs = ms;
+      if(ms >= weekAgo){
+        newThisWeek++;
+        if(isFinite(v) && v > 0) newThisWeekVal += v;
+      }
+    }
+  });
+
+  const topStreet = [...byStreet.entries()].sort((a,b) => b[1] - a[1])[0];
+  const topType = [...byType.entries()].sort((a,b) => b[1] - a[1])[0];
+  const avgVal = values.length ? values.reduce((s,v)=>s+v, 0) / values.length : 0;
+  const sortedV = values.slice().sort((a,b) => a - b);
+  const medianVal = sortedV.length ? sortedV[Math.floor(sortedV.length / 2)] : 0;
+  const daysSinceLast = mostRecentMs ? Math.floor((now - mostRecentMs) / 86400000) : null;
+
+  return { topStreet, topType, avgVal, medianVal, newThisWeek, newThisWeekVal, daysSinceLast, totalPriced: values.length, distinctTypes: byType.size };
+}
+function renderInsights(){
+  const el = document.getElementById('insights-list');
+  if(!el) return;
+  const i = computeInsights();
+  const items = [];
+  if(i.topStreet){
+    items.push({ label:'Most active street', value:i.topStreet[0].length > 22 ? i.topStreet[0].slice(0,22)+'…' : i.topStreet[0], sub:`${i.topStreet[1].toLocaleString()} permit${i.topStreet[1]===1?'':'s'}`, isText:true });
+  }
+  if(i.avgVal > 0){
+    items.push({ label:'Avg permit value', value:fmtMoney(i.avgVal), sub:`across ${i.totalPriced.toLocaleString()} priced` });
+  }
+  if(i.medianVal > 0){
+    items.push({ label:'Median value', value:fmtMoney(i.medianVal), sub:'half above · half below' });
+  }
+  items.push({ label:'New this week', value:i.newThisWeek.toLocaleString(), sub:i.newThisWeekVal > 0 ? `${fmtMoney(i.newThisWeekVal)} in value` : 'last 7 days' });
+  if(i.topType){
+    items.push({ label:'Top type', value:i.topType[0].length > 22 ? i.topType[0].slice(0,22)+'…' : i.topType[0], sub:`${i.topType[1].toLocaleString()} permit${i.topType[1]===1?'':'s'} · ${i.distinctTypes} types total`, isText:true });
+  }
+  if(i.daysSinceLast !== null){
+    items.push({ label:'Most recent', value:i.daysSinceLast === 0 ? 'today' : i.daysSinceLast === 1 ? 'yesterday' : `${i.daysSinceLast}d ago`, sub:'latest permit date', isText:true });
+  }
+
+  if(items.length === 0){
+    el.innerHTML = '<div class="ins-item ins-empty">No data in current filter</div>';
+    return;
+  }
+  el.innerHTML = items.map(it => `
+    <div class="ins-item">
+      <div class="ins-label">${it.label}</div>
+      <div class="ins-value${it.isText?' ins-text':''}">${it.value}</div>
+      <div class="ins-sub">${it.sub}</div>
+    </div>`).join('');
+}
+
+// =====================================================================
+// SELECTION CARD · mirrors graph pin in the right rail
+// =====================================================================
+function showSelection(d){
+  const panel = document.getElementById('selection-panel');
+  const body = document.getElementById('sel-body');
+  const srcEl = document.getElementById('sel-source');
+  if(!panel || !body) return;
+  const sourceLabel = d.kind === 'cip' ? 'CIP' : (d.source === 'county' ? 'County' : 'City');
+  const sourceColor = d.kind === 'cip' ? '#0891b2' : (d.source === 'county' ? '#8b5cf6' : '#0b6cb5');
+  srcEl.style.background = sourceColor;
+  srcEl.textContent = sourceLabel;
+  const cls = statusClass(d.status);
+  const valRow = isFinite(d.value) && d.value > 0
+    ? `<div class="sel-row"><span class="sel-key">Declared value</span><span class="sel-val sel-money">${fmtMoneyFull(d.value)}</span></div>`
+    : '';
+  body.innerHTML = `
+    <div class="sel-num">${d.number || d.address || '—'}</div>
+    ${d.number && d.address ? `<div class="sel-addr">${d.address}</div>` : ''}
+    <div class="sel-pills">
+      ${d.type ? `<span class="sel-pill" style="background:${sourceColor}15;color:${sourceColor};border-color:${sourceColor}40">${d.type.length>22?d.type.slice(0,22)+'…':d.type}</span>` : ''}
+      ${d.status ? `<span class="sel-pill pill ${cls}">${d.status.length>14?d.status.slice(0,14):d.status}</span>` : ''}
+      ${d.inDDA ? `<span class="sel-pill" style="background:rgba(10,90,150,.1);color:var(--accent);border-color:rgba(10,90,150,.3)">In DDA</span>` : ''}
+    </div>
+    ${valRow}
+    <div class="sel-row"><span class="sel-key">Date</span><span class="sel-val">${d.date ? fmtDate(d.date) : '—'}</span></div>
+    <div class="sel-row"><span class="sel-key">Folio</span><span class="sel-val">${d.folio || '—'}</span></div>
+    <div class="sel-row"><span class="sel-key">Connections</span><span class="sel-val">${d.degree || 0}</span></div>
+    <div class="sel-actions">
+      <button class="btn btn-full" id="sel-view-map">View on Map</button>
+    </div>`;
+  document.getElementById('sel-view-map').addEventListener('click', () => {
+    if(!d.lat || !d.lng) return;
+    activateView('map');
+    map.setView([d.lat, d.lng], 18);
+    const targetLayer = d.source === 'county' ? countyLayer : permitLayer;
+    targetLayer?.eachLayer(l => {
+      const ll = l.getLatLng();
+      if(Math.abs(ll.lat - d.lat) < 1e-6 && Math.abs(ll.lng - d.lng) < 1e-6) l.openPopup();
+    });
+  });
+  panel.style.display = '';
+}
+function clearSelection(){
+  const panel = document.getElementById('selection-panel');
+  if(panel) panel.style.display = 'none';
+}
+function wireSelectionClose(){
+  const btn = document.getElementById('sel-close');
+  if(!btn) return;
+  btn.addEventListener('click', () => {
+    if(_setGraphPin) _setGraphPin(null);
+    else clearSelection();
+  });
 }
 function fmtDate(v){
   if(v == null || v === '') return '--';
@@ -807,6 +987,7 @@ function applyFilters(){
 
   renderPermitMarkers();
   renderKPIs();
+  renderInsights();
   renderStatusChart();
   renderTypeChart();
   renderTimelineChart();
@@ -1702,11 +1883,14 @@ function renderGraph(){
       const rect = document.getElementById('graph').getBoundingClientRect();
       tip.style.left = Math.min(rect.width - 280, cx + 16) + 'px';
       tip.style.top  = Math.min(rect.height - 200, cy + 16) + 'px';
+      showSelection(d);
     } else {
       tip.classList.remove('pinned', 'show');
       clearEgo();
+      clearSelection();
     }
   };
+  _setGraphPin = setPin;
 
   nodeSel.on('mousemove', (ev, d) => { if(!pinnedNodeId) showTip(ev, d); });
   nodeSel.on('mouseenter', (ev, d) => { if(!pinnedNodeId) applyEgo(d); });
@@ -2428,6 +2612,7 @@ window.dumpSchema = function(){
     wireLayerToggles();
     wireViewToggle();
     wireSidebarActions();
+    wireSelectionClose();
     restoreStateFromHash();
     renderCIPMarkers();
     applyFilters();      // renders markers, KPIs, charts, table, count

@@ -14,30 +14,35 @@
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <style>
 :root{
-  --bg:#eaeef3;
-  --bg-deep:#dde3ea;
-  --panel:#ffffff;
-  --panel-2:#f6f9fc;
-  --panel-3:#fafbfd;
-  --border:#e1e6ed;
-  --border-2:#cfd6df;
-  --text:#0f1a2a;
-  --muted:#56657a;
-  --dim:#8a96a8;
+  --bg:#e6e1d2;
+  --bg-deep:#d4ccb6;
+  --panel:#fdfbf4;
+  --panel-2:#f5efde;
+  --panel-3:#faf6ea;
+  --border:#d8cdb3;
+  --border-2:#bcad8c;
+  --text:#2a2418;
+  --muted:#6c5f47;
+  --dim:#9d8d6f;
   --accent:#0a5a96;
   --accent-2:#0b6cb5;
-  --accent-soft:#e3eef7;
+  --accent-soft:rgba(10,90,150,.1);
   --accent-deep:#08446f;
-  --gold:#c4912f;
-  --gold-soft:rgba(196,145,47,.12);
+  --gold:#b8862c;
+  --gold-2:#c4912f;
+  --gold-soft:rgba(184,134,44,.14);
+  --gold-deep:#8a6321;
+  --teal-deep:#0a2638;
+  --teal-mid:#13415d;
+  --teal-light:#1a5170;
   --cyan:#0891b2;
   --good:#15803d;
-  --warn:#b45309;
-  --bad:#b91c1c;
-  --shadow:0 1px 2px rgba(15,26,42,.04),0 1px 3px rgba(15,26,42,.05);
-  --shadow-md:0 2px 6px rgba(15,26,42,.06),0 4px 12px rgba(15,26,42,.05);
-  --shadow-lg:0 8px 24px rgba(15,26,42,.12);
-  --ring:0 0 0 1px rgba(15,26,42,.04) inset;
+  --warn:#a16207;
+  --bad:#9f1239;
+  --shadow:0 1px 2px rgba(42,36,24,.06),0 1px 3px rgba(42,36,24,.06);
+  --shadow-md:0 2px 6px rgba(42,36,24,.08),0 4px 14px rgba(42,36,24,.07);
+  --shadow-lg:0 8px 28px rgba(42,36,24,.16);
+  --ring:0 0 0 1px rgba(184,134,44,.08) inset;
   --mono:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -45,12 +50,11 @@ html,body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,-
 body{
   min-height:100vh;padding:18px;display:flex;flex-direction:column;gap:14px;
   background:
-    radial-gradient(circle at 20% 0%,rgba(10,90,150,.04) 0%,transparent 45%),
-    radial-gradient(circle at 90% 10%,rgba(196,145,47,.035) 0%,transparent 35%),
-    radial-gradient(circle 1px at 20px 20px,rgba(15,26,42,.05) 1px,transparent 0) 0 0/24px 24px,
+    radial-gradient(circle at 20% 0%,rgba(184,134,44,.07) 0%,transparent 45%),
+    radial-gradient(circle at 90% 10%,rgba(10,90,150,.04) 0%,transparent 35%),
+    radial-gradient(circle 1px at 20px 20px,rgba(42,36,24,.045) 1px,transparent 0) 0 0/24px 24px,
     var(--bg);
 }
-/* Tabular numbers for any KPI / mono / stat */
 .value,.mono,.kpi .delta,.graph-stats,td:nth-child(4),thead th:nth-child(4){font-variant-numeric:tabular-nums}
 
 /* ==== HEADER ==== */
@@ -107,22 +111,26 @@ body{
 .toggle.active{color:var(--text);background:#fff;border-color:var(--border-2);box-shadow:var(--shadow)}
 .toggle.off{opacity:.45;text-decoration:line-through}
 
-#map{height:100%;min-height:520px;background:#dfe6ec}
-.leaflet-container{background:#dfe6ec;font-family:'Inter',sans-serif}
-.leaflet-popup-content-wrapper{background:#fff !important;color:var(--text);border-radius:10px;box-shadow:var(--shadow-lg);border:1px solid var(--border)}
-.leaflet-popup-tip{background:#fff !important;border:1px solid var(--border)}
-.leaflet-popup-content{font-family:'Inter',sans-serif;font-size:12px;margin:12px 14px;line-height:1.55}
-.leaflet-popup-close-button{color:var(--muted) !important}
-.leaflet-control-zoom a{background:#fff!important;color:var(--accent)!important;border:1px solid var(--border-2)!important}
-.leaflet-control-attribution{background:rgba(255,255,255,.8)!important;color:var(--dim)!important;font-size:10px!important}
-.leaflet-control-attribution a{color:var(--muted)!important}
+#map{height:100%;min-height:520px;background:transparent}
+.leaflet-container{background:transparent;font-family:'Inter',sans-serif}
+/* Dark map popups for the Base Layer dark stage */
+.leaflet-popup-content-wrapper{background:rgba(8,30,44,.95) !important;color:#e8dfca !important;border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,.55);border:1px solid rgba(196,145,47,.45);backdrop-filter:blur(8px)}
+.leaflet-popup-tip{background:rgba(8,30,44,.95) !important;border:0 !important}
+.leaflet-popup-content{font-family:'Inter',sans-serif;font-size:12px;margin:12px 14px;line-height:1.55;color:#e8dfca}
+.leaflet-popup-close-button{color:#c4912f !important;font-size:18px !important}
+.leaflet-popup-close-button:hover{color:#f4cf86 !important}
+.leaflet-control-zoom a{background:rgba(8,30,44,.92)!important;color:#c4912f!important;border:1px solid rgba(196,145,47,.4)!important}
+.leaflet-control-zoom a:hover{background:rgba(19,65,93,.95)!important;color:#f4cf86!important}
+.leaflet-control-attribution{background:rgba(8,30,44,.78)!important;color:#9c8c6f!important;font-size:10px!important;border-top:1px solid rgba(196,145,47,.2)}
+.leaflet-control-attribution a{color:#c4912f!important}
 
 .right-col{display:flex;flex-direction:column;gap:14px;min-height:0}
 .right-col .panel{flex:1;min-height:0}
 .chart-wrap{position:relative;width:100%;height:100%;min-height:200px}
 
 .bottom{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.bottom .panel{height:380px}
+.bottom .panel{height:380px;background:linear-gradient(180deg,var(--panel) 0%,var(--panel-3) 100%);border-color:var(--border)}
+.bottom .panel .head{background:linear-gradient(180deg,#faf6ea 0%,transparent 100%)}
 
 /* ==== TABLE ==== */
 .table-wrap{height:100%;overflow-y:auto;overflow-x:hidden}
@@ -142,14 +150,15 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .pill.dim{color:var(--muted);background:var(--panel-2);border-color:var(--border-2)}
 .pill.cyan{color:var(--cyan);background:rgba(8,145,178,.1);border-color:rgba(8,145,178,.25)}
 
-.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.94);color:var(--accent);font-size:12px;font-weight:600;letter-spacing:.04em;z-index:10;text-align:center;padding:20px}
+.loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,38,56,.94);color:#c4912f;font-size:12px;font-weight:600;letter-spacing:.06em;z-index:10;text-align:center;padding:20px;text-transform:uppercase}
 .loading-inner{display:flex;align-items:center}
-.loading-inner::after{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:10px;animation:blink .8s infinite}
+.loading-inner::after{content:'';width:7px;height:7px;border-radius:50%;background:#c4912f;margin-left:10px;animation:blink .8s infinite}
 @keyframes blink{50%{opacity:0}}
 
-.legend{position:absolute;bottom:14px;left:14px;background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:10px 12px;font-size:10px;font-weight:500;color:var(--muted);z-index:400;display:flex;flex-direction:column;gap:5px;max-height:calc(100% - 28px);overflow-y:auto}
+.legend{position:absolute;bottom:14px;left:14px;background:rgba(8,30,44,.92);border:1px solid rgba(196,145,47,.4);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.45);padding:10px 12px;font-size:10px;font-weight:500;color:#cfc4a8;z-index:400;display:flex;flex-direction:column;gap:5px;max-height:calc(100% - 28px);overflow-y:auto;backdrop-filter:blur(8px)}
 .legend span{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
-.legend .lg-section{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-top:4px;font-weight:700}
+.legend > div{color:#e8dfca}
+.legend .lg-section{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#c4912f !important;margin-top:4px;font-weight:700}
 .legend .lg-section:first-child{margin-top:0}
 
 /* ==== VIEW TOGGLE (Map / Network) ==== */
@@ -292,26 +301,21 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .stage-head h1{font-size:18px;font-weight:700;letter-spacing:-.022em;color:var(--text);line-height:1.2}
 .stage-meta{font-size:11px;color:var(--muted);font-weight:500;text-align:right;flex-shrink:0;white-space:nowrap}
 .stage-meta b{color:var(--accent);font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
-.stage-body{flex:1;position:relative;min-height:0;overflow:hidden;border-radius:0 0 13px 13px;background:var(--panel-2)}
+/* ============ "BASE LAYER" treatment · ALL stage views ============ */
+.stage-body{flex:1;position:relative;min-height:0;overflow:hidden;border-radius:0 0 13px 13px;background:radial-gradient(circle at 50% 45%,var(--teal-mid) 0%,var(--teal-deep) 85%)}
 
-/* ============ "BASE LAYER" treatment · graph view only ============ */
-/* The Network view gets the dark teal + sacred-geometry + gold-ornament
-   treatment from the reference image. Map view stays neutral. */
-#graph{
-  background:
-    radial-gradient(circle at 50% 45%,#13415d 0%,#0a2638 85%) !important;
-}
-#graph::before{
+/* Sacred-geometry hex backdrop — sits behind map AND graph */
+.stage-body::before{
   content:'';
   position:absolute;inset:0;z-index:0;pointer-events:none;
-  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='156' viewBox='0 0 180 156'%3E%3Cg fill='none' stroke='%23c4912f' stroke-width='1'%3E%3Cpath d='M90 0 L180 45 L180 111 L90 156 L0 111 L0 45 Z' opacity='.55'/%3E%3Cpath d='M90 39 L135 61 L135 106 L90 128 L45 106 L45 61 Z' opacity='.75'/%3E%3Ccircle cx='90' cy='78' r='4' opacity='.85'/%3E%3Cpath d='M90 39 L90 128 M45 61 L135 106 M135 61 L45 106' opacity='.25'/%3E%3C/g%3E%3C/svg%3E");
+  background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='156' viewBox='0 0 180 156'%3E%3Cg fill='none' stroke='%23c4912f' stroke-width='1'%3E%3Cpath d='M90 0 L180 45 L180 111 L90 156 L0 111 L0 45 Z' opacity='.45'/%3E%3Cpath d='M90 39 L135 61 L135 106 L90 128 L45 106 L45 61 Z' opacity='.65'/%3E%3Ccircle cx='90' cy='78' r='4' opacity='.8'/%3E%3Cpath d='M90 39 L90 128 M45 61 L135 106 M135 61 L45 106' opacity='.22'/%3E%3C/g%3E%3C/svg%3E");
   background-size:240px 208px;
   background-position:center;
-  opacity:.18;
+  opacity:.08;
 }
-#graph::after{
+.stage-body::after{
   content:'';
-  position:absolute;inset:0;z-index:0;pointer-events:none;
+  position:absolute;inset:0;z-index:3;pointer-events:none;
   background-image:
     url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M2 22 L2 2 L22 2' fill='none' stroke='%23c4912f' stroke-width='1.5' opacity='.7'/%3E%3Ccircle cx='6' cy='6' r='2' fill='%23c4912f' opacity='.85'/%3E%3C/svg%3E"),
     url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40'%3E%3Cpath d='M38 22 L38 2 L18 2' fill='none' stroke='%23c4912f' stroke-width='1.5' opacity='.7'/%3E%3Ccircle cx='34' cy='6' r='2' fill='%23c4912f' opacity='.85'/%3E%3C/svg%3E"),
@@ -320,6 +324,11 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
   background-repeat:no-repeat;
   background-position:top 12px left 12px,top 12px right 12px,bottom 12px left 12px,bottom 12px right 12px;
 }
+
+#map,#graph svg{position:relative;z-index:1}
+#map{background:transparent}
+
+#graph{background:transparent !important}
 #graph svg{position:relative;z-index:1}
 
 /* Graph overlays adapt to dark backdrop */
@@ -912,7 +921,7 @@ function setLoading(msg){
 function initMap(){
   map = L.map('map', { zoomControl:true, attributionControl:true, preferCanvas:true })
     .setView([25.7785, -80.190], 14);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
     attribution:'© OpenStreetMap · © CARTO',
     subdomains:'abcd',
     maxZoom:19
@@ -931,7 +940,7 @@ async function loadDDA(){
   ddaFeature = gj.features[0];
 
   ddaLayer = L.geoJSON(gj, {
-    style:{ color:'#0b6cb5', weight:2, fillColor:'#0b6cb5', fillOpacity:0.05, dashArray:'6 4' }
+    style:{ color:'#c4912f', weight:2.5, fillColor:'#c4912f', fillOpacity:0.08, dashArray:'6 4' }
   }).addTo(map);
   map.fitBounds(ddaLayer.getBounds(), { padding:[24,24] });
 
@@ -1142,22 +1151,22 @@ function syncLayers(){
 function permitPopupHTML(p, sourceKey){
   const scope = pick(p, FIELDS.scope);
   const srcLabel = sourceKey === 'county' ? 'Miami-Dade County' : 'City of Miami';
-  const srcColor = sourceKey === 'county' ? '#8b5cf6' : '#0b6cb5';
+  const srcColor = sourceKey === 'county' ? '#c4a5f0' : '#7ec5f4';
   const val = getValuation(p);
   const valRow = isFinite(val) && val > 0
-    ? `<br><span style="color:#97a3b2">Value</span> <b style="color:#0b6cb5">${fmtMoneyFull(val)}</b>`
+    ? `<br><span style="color:#9c8c6f">Value</span> <b style="color:#f4cf86">${fmtMoneyFull(val)}</b>`
     : '';
   return `
     <div style="min-width:220px">
-      <div style="color:${srcColor};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">${srcLabel} Permit</div>
-      <div style="font-weight:700;margin:5px 0;color:#16202e;font-family:'JetBrains Mono',monospace">${pick(p,FIELDS.number) || '—'}</div>
-      <div style="color:#5d6b7d;font-size:12px;margin-bottom:8px">${pick(p,FIELDS.address) || '—'}</div>
+      <div style="color:${srcColor};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">${srcLabel} Permit</div>
+      <div style="font-weight:700;margin:5px 0;color:#fff;font-family:'JetBrains Mono',monospace">${pick(p,FIELDS.number) || '—'}</div>
+      <div style="color:#cfc4a8;font-size:12px;margin-bottom:8px">${pick(p,FIELDS.address) || '—'}</div>
       <div style="font-size:11px;line-height:1.8">
-        <span style="color:#97a3b2">Type&nbsp;&nbsp;</span> ${pick(p,FIELDS.permitType) || '—'}<br>
-        <span style="color:#97a3b2">Status</span> ${pick(p,FIELDS.permitStatus) || '—'}<br>
-        <span style="color:#97a3b2">Date&nbsp;&nbsp;</span> ${fmtDate(pick(p,FIELDS.permitDate))}<br>
-        <span style="color:#97a3b2">Folio&nbsp;</span> ${pick(p,FIELDS.folio) || '—'}${valRow}
-        ${scope ? `<br><span style="color:#97a3b2">Scope</span> <span style="color:#3a4656">${String(scope).slice(0,180)}</span>` : ''}
+        <span style="color:#9c8c6f">Type&nbsp;&nbsp;</span> ${pick(p,FIELDS.permitType) || '—'}<br>
+        <span style="color:#9c8c6f">Status</span> ${pick(p,FIELDS.permitStatus) || '—'}<br>
+        <span style="color:#9c8c6f">Date&nbsp;&nbsp;</span> ${fmtDate(pick(p,FIELDS.permitDate))}<br>
+        <span style="color:#9c8c6f">Folio&nbsp;</span> ${pick(p,FIELDS.folio) || '—'}${valRow}
+        ${scope ? `<br><span style="color:#9c8c6f">Scope</span> <span style="color:#e8dfca">${String(scope).slice(0,180)}</span>` : ''}
       </div>
     </div>`;
 }
@@ -1202,9 +1211,9 @@ function renderCIPMarkers(){
       const status = p.Status || p.STATUS || p.ProjectStatus || '';
       layer.bindPopup(`
         <div style="min-width:200px">
-          <div style="color:#0891b2;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Capital Improvement</div>
-          <div style="font-weight:700;margin:5px 0;color:#16202e">${name}</div>
-          ${status ? `<div style="font-size:11px;color:#5d6b7d">Status · <span style="color:#16202e">${status}</span></div>` : ''}
+          <div style="color:#5dd5e8;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Capital Improvement</div>
+          <div style="font-weight:700;margin:5px 0;color:#fff">${name}</div>
+          ${status ? `<div style="font-size:11px;color:#9c8c6f">Status · <span style="color:#e8dfca">${status}</span></div>` : ''}
         </div>`);
     }
   });

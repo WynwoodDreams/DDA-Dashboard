@@ -188,6 +188,12 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .graph-controls button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .graph-controls .ico{display:inline-block;width:10px;height:10px}
 
+/* Mini-map overview */
+.minimap{position:absolute;bottom:14px;right:14px;width:170px;height:120px;background:rgba(255,255,255,.96);border:1px solid var(--border-2);border-radius:8px;box-shadow:var(--shadow);overflow:hidden;z-index:401;cursor:pointer}
+.minimap svg{display:block;width:100%;height:100%}
+.minimap .mm-label{position:absolute;top:5px;left:8px;font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.05em;text-transform:uppercase;pointer-events:none;font-family:'Inter',sans-serif}
+.mm-viewport{fill:rgba(11,108,181,.15);stroke:#0b6cb5;stroke-width:1.2;stroke-dasharray:3 2;pointer-events:none}
+
 .footer{font-size:11px;color:var(--dim);text-align:center;padding:12px;font-weight:500;border-top:1px solid var(--border);margin-top:auto}
 .footer a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--dim)}
 .footer a:hover{color:var(--accent)}
@@ -278,6 +284,10 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
           <button id="g-rotate" title="Toggle slow rotation">↻ Rotate</button>
           <button id="g-reheat" title="Reheat the simulation">↯ Reheat</button>
           <button id="g-reset" title="Reset zoom &amp; layout">⤢ Reset</button>
+        </div>
+        <div class="minimap" id="minimap" style="display:none">
+          <span class="mm-label">Overview</span>
+          <svg></svg>
         </div>
       </div>
       <div class="legend" id="map-legend">
@@ -1145,7 +1155,10 @@ function renderGraph(){
   // Layered structure: svg > zoom-layer > rotate-layer > contents
   const zoomLayer = svgSel.append('g').attr('class', 'gz');
   const rotateLayer = zoomLayer.append('g').attr('class', 'rot');
-  graphZoomBehavior = d3.zoom().scaleExtent([0.2, 6]).on('zoom', e => zoomLayer.attr('transform', e.transform));
+  graphZoomBehavior = d3.zoom().scaleExtent([0.2, 6]).on('zoom', e => {
+    zoomLayer.attr('transform', e.transform);
+    updateMinimapViewport(e.transform);
+  });
   svgSel.call(graphZoomBehavior);
 
   // DDA halo (drawn first, behind nodes)
@@ -1372,6 +1385,57 @@ function renderGraph(){
   // Force-stop after 8s to save CPU
   setTimeout(() => { sim.alphaTarget(0); }, 8000);
 
+  // ---- Minimap ----
+  const mmSvg = d3.select('#minimap svg');
+  mmSvg.selectAll('*').remove();
+  const mmEl = document.getElementById('minimap');
+  const mmW = mmEl.clientWidth || 170, mmH = mmEl.clientHeight || 120;
+  // We render every node as a tiny dot at sim coordinates (which span ~w x h)
+  // Use a transform so it scales with the main canvas
+  const mmScale = Math.min(mmW / w, mmH / h) * 0.9;
+  const mmOffsetX = (mmW - w * mmScale) / 2;
+  const mmOffsetY = (mmH - h * mmScale) / 2;
+  const mmG = mmSvg.append('g').attr('transform', `translate(${mmOffsetX},${mmOffsetY}) scale(${mmScale})`);
+  const mmNodeSel = mmG.append('g').selectAll('circle').data(nodes).enter().append('circle')
+    .attr('r', d => Math.max(2.5, radiusOf(d) * 0.6))
+    .attr('fill', colorOf)
+    .attr('fill-opacity', 0.85)
+    .attr('stroke', d => d.inDDA ? '#0b6cb5' : 'none')
+    .attr('stroke-width', d => d.inDDA ? 0.8 : 0);
+  // Viewport rectangle on top
+  const mmViewport = mmSvg.append('rect').attr('class', 'mm-viewport');
+
+  // Sync minimap node positions on every tick (lightweight — radii are tiny)
+  sim.on('tick.minimap', () => {
+    mmNodeSel.attr('cx', d => d.x).attr('cy', d => d.y);
+  });
+
+  // Compute the visible viewport rect from current zoom transform
+  function updateMinimapViewport(t){
+    if(!t) t = d3.zoomIdentity;
+    // World coords visible: x in [-t.x/t.k, (w - t.x)/t.k]; y similar
+    const x0 = -t.x / t.k, y0 = -t.y / t.k;
+    const ww = w / t.k, hh = h / t.k;
+    mmViewport
+      .attr('x', mmOffsetX + x0 * mmScale)
+      .attr('y', mmOffsetY + y0 * mmScale)
+      .attr('width', ww * mmScale)
+      .attr('height', hh * mmScale);
+  }
+  updateMinimapViewport(d3.zoomIdentity);
+
+  // Click on minimap → recenter main canvas at that point
+  mmSvg.on('click', (ev) => {
+    const rect = mmSvg.node().getBoundingClientRect();
+    const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+    // Convert minimap coords back to world coords
+    const wx = (mx - mmOffsetX) / mmScale;
+    const wy = (my - mmOffsetY) / mmScale;
+    const t = d3.zoomTransform(svgSel.node());
+    const newT = d3.zoomIdentity.translate(w/2 - wx * t.k, h/2 - wy * t.k).scale(t.k);
+    svgSel.transition().duration(400).call(graphZoomBehavior.transform, newT);
+  });
+
   // Rotation: spin the inner layer around the canvas center
   if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
   const tickRotate = () => {
@@ -1440,6 +1504,7 @@ function activateView(v){
   const mapToggles = document.getElementById('map-layer-toggles');
   const title = document.getElementById('view-title');
   const graphControls = document.getElementById('graph-controls');
+  const minimap = document.getElementById('minimap');
   if(v === 'graph'){
     mapEl.classList.add('hidden');
     graphEl.classList.add('active');
@@ -1447,6 +1512,7 @@ function activateView(v){
     graphLegend.style.display = '';
     graphStats.style.display = '';
     graphControls.style.display = '';
+    minimap.style.display = '';
     mapToggles.style.display = 'none';
     title.textContent = 'Permit Network Graph';
     renderGraph();
@@ -1457,6 +1523,7 @@ function activateView(v){
     graphLegend.style.display = 'none';
     graphStats.style.display = 'none';
     graphControls.style.display = 'none';
+    minimap.style.display = 'none';
     mapToggles.style.display = '';
     title.textContent = 'Geographic Distribution';
     if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }

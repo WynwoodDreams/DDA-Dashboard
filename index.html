@@ -156,6 +156,13 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .glink.lit{stroke-opacity:.95 !important;stroke-width:2.5 !important}
 .gnode.lit{stroke:#16202e !important;stroke-width:2.5 !important}
 .gnode.pinned{stroke:#0b6cb5 !important;stroke-width:3.5 !important;filter:drop-shadow(0 0 5px rgba(11,108,181,.9))}
+.gnode.type-hidden{opacity:.07}
+.glink.type-hidden{stroke-opacity:.04 !important}
+#graph-color-legend > div{cursor:pointer;border-radius:4px;padding:1px 4px;margin:0 -4px;transition:background .12s,color .12s;display:flex;align-items:center;line-height:1.6}
+#graph-color-legend > div:hover{background:var(--accent-soft);color:var(--text)}
+#graph-color-legend > div.active{background:var(--accent);color:#fff}
+#graph-color-legend > div.active span{box-shadow:0 0 0 2px #fff inset}
+#graph-color-legend > div.dim{opacity:.4}
 .graph-tip.pinned{pointer-events:auto;border:1px solid #0b6cb5}
 .graph-tip .tt-actions{margin-top:8px;display:flex;gap:6px}
 .graph-tip .tt-btn{appearance:none;background:#0b6cb5;color:#fff;border:0;border-radius:6px;padding:5px 10px;font-size:10px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;letter-spacing:.02em}
@@ -396,6 +403,7 @@ let graphRotateRAF = null;
 let graphRotateAngle = 0;
 let graphZoomBehavior = null;
 let pinnedNodeId = null;
+const activeTypeFilter = new Set();   // empty = show all
 
 // =====================================================================
 // HELPERS
@@ -1073,24 +1081,63 @@ function renderGraph(){
   svgSel.selectAll('*').remove();
   const node0 = svgSel.node();
   const w = node0.clientWidth || 800, h = node0.clientHeight || 560;
+  const nodeById = new Map(nodes.map(n => [n.id, n]));
 
   // Stats
   document.getElementById('g-nodes').textContent = nodes.length.toLocaleString() + (truncated ? '*' : '');
   document.getElementById('g-edges').textContent = edges.length.toLocaleString();
   document.getElementById('g-dda').textContent = nodes.filter(n => n.inDDA).length.toLocaleString();
 
-  // Render legend swatches
+  // Render interactive legend swatches (click to filter by type)
   const legend = document.getElementById('graph-color-legend');
   legend.innerHTML = '';
+  // Drop type filters that aren't in the current data
+  for(const t of [...activeTypeFilter]) if(!typeColors.has(t)) activeTypeFilter.delete(t);
   [...typeColors.entries()].forEach(([t, c]) => {
     const lbl = t.length > 22 ? t.slice(0, 22) + '…' : t;
     const div = document.createElement('div');
+    div.dataset.type = t;
     div.innerHTML = `<span style="background:${c}"></span>${lbl}`;
+    div.addEventListener('click', () => {
+      if(activeTypeFilter.has(t)) activeTypeFilter.delete(t);
+      else activeTypeFilter.add(t);
+      applyTypeFilter();
+    });
     legend.appendChild(div);
   });
+  if(activeTypeFilter.size > 0){
+    const clearBtn = document.createElement('div');
+    clearBtn.innerHTML = `<span style="background:transparent;border:1px dashed var(--muted)"></span><i style="font-style:normal;color:var(--accent);font-weight:600">Clear filter</i>`;
+    clearBtn.addEventListener('click', () => { activeTypeFilter.clear(); applyTypeFilter(); });
+    legend.appendChild(clearBtn);
+  }
   if([...typeColors.entries()].length === 0){
     legend.innerHTML = '<div style="color:var(--dim)">No data</div>';
   }
+
+  const applyTypeFilter = () => {
+    const active = activeTypeFilter.size > 0;
+    // Mark hidden nodes
+    nodeSel.classed('type-hidden', n => active && !activeTypeFilter.has(n.type));
+    // An edge is hidden when EITHER endpoint is hidden
+    linkSel.classed('type-hidden', d => {
+      if(!active) return false;
+      const s = typeof d.source === 'object' ? d.source : nodeById.get(d.source);
+      const t = typeof d.target === 'object' ? d.target : nodeById.get(d.target);
+      return !activeTypeFilter.has(s.type) || !activeTypeFilter.has(t.type);
+    });
+    // Reflect state in legend
+    legend.querySelectorAll('[data-type]').forEach(el => {
+      const t = el.dataset.type;
+      el.classList.toggle('active', activeTypeFilter.has(t));
+      el.classList.toggle('dim', active && !activeTypeFilter.has(t));
+    });
+    // Re-render legend if we just left/entered filter mode (to add/remove Clear button)
+    if((active && !legend.querySelector('i')) || (!active && legend.querySelector('i'))){
+      renderGraph();
+    }
+  };
+  applyTypeFilter();
 
   const colorOf = n => n.kind === 'cip' ? '#0891b2' : (typeColors.get(n.type) || '#94a3b8');
   const radiusOf = n => n.kind === 'cip' ? 7 : Math.max(3, Math.min(12, 3 + Math.sqrt(n.degree)));
@@ -1162,7 +1209,6 @@ function renderGraph(){
 
   // Tooltip
   const tip = document.getElementById('graph-tip');
-  const nodeById = new Map(nodes.map(n => [n.id, n]));
 
   const renderTipBody = (d, pinned) => {
     const src = d.kind === 'cip' ? 'CIP' : (d.source === 'county' ? 'Miami-Dade Co.' : 'City of Miami');

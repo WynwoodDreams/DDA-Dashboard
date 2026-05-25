@@ -1364,7 +1364,7 @@ function renderGraph(){
       renderGraph();
     }
   };
-  applyTypeFilter();
+  // NOTE: applyTypeFilter() runs further down, after nodeSel/linkSel exist.
 
   const colorOf = n => n.kind === 'cip' ? '#0891b2' : (typeColors.get(n.type) || '#94a3b8');
   // Pre-compute log-value range for $ sizing mode
@@ -1438,6 +1438,9 @@ function renderGraph(){
       .attr('fill', colorOf)
       .attr('stroke', d => d.inDDA ? '#0b6cb5' : '#ffffff')
       .attr('stroke-width', d => d.inDDA ? 2 : 1);
+
+  // Now that nodeSel + linkSel exist, apply any persisted type filter
+  applyTypeFilter();
 
   // Persistent hub labels: top 15 by degree
   const hubNodes = nodes.slice().sort((a, b) => b.degree - a.degree).slice(0, 15).filter(n => n.degree > 0);
@@ -1767,8 +1770,8 @@ function renderGraph(){
       .text(d => new Date(d).toISOString().slice(0, 7));
 
     if(!scrubberWindow){
-      const span = maxD - minD;
-      scrubberWindow = [Math.max(minD, maxD - span * 0.25), maxD];
+      // Default to FULL range so nothing is faded out on first render
+      scrubberWindow = [minD, maxD];
     } else {
       scrubberWindow = [Math.max(minD, scrubberWindow[0]), Math.min(maxD, scrubberWindow[1])];
     }
@@ -2074,6 +2077,35 @@ function showError(title, detail){
     </div>`;
 }
 
+// Debug helper: run dumpSchema() in the browser console to see what fields
+// the endpoints actually return. Suggests likely valuation fields.
+window.dumpSchema = function(){
+  const sources = [
+    { label: 'PERMITS (city)', sample: permitsData.filter(f => f._source === 'city').slice(0, 3) },
+    { label: 'PERMITS (county)', sample: permitsData.filter(f => f._source === 'county').slice(0, 3) },
+    { label: 'CIP', sample: cipData.slice(0, 3) }
+  ];
+  const moneyRx = /cost|value|valuation|budget|funding|amount|fee|estimat|construct|job|price/i;
+  sources.forEach(s => {
+    if(!s.sample.length){ console.log(`\n==== ${s.label} ==== (no records)`); return; }
+    const fields = new Set();
+    s.sample.forEach(f => Object.keys(f.properties || {}).forEach(k => fields.add(k)));
+    console.log(`\n==== ${s.label} ==== (${s.sample.length} samples, ${fields.size} fields)`);
+    const suggested = [...fields].filter(k => moneyRx.test(k));
+    if(suggested.length){
+      console.log('Likely $ fields:');
+      suggested.forEach(k => {
+        const vals = s.sample.map(f => f.properties?.[k]).filter(v => v != null);
+        console.log(`  ${k} → e.g. ${JSON.stringify(vals.slice(0,3))}`);
+      });
+    } else {
+      console.log('No fields matching cost/value/budget/etc. — endpoint may not expose them.');
+    }
+    console.log('All fields:', [...fields].sort().join(', '));
+  });
+  console.log('\nTo enable a newly-discovered field, edit FIELDS.valuation / FIELDS.cipBudget in index.html.');
+};
+
 (async function main(){
   tickClock();
   setInterval(tickClock, 1000);
@@ -2132,6 +2164,7 @@ function showError(title, detail){
     applyFilters();      // renders markers, KPIs, charts, table, count
 
     console.log(`[DDA] loaded ${permitsData.length} permits, ${cipData.length} CIP projects`);
+    console.log('[DDA] Run %cdumpSchema()%c in this console to see actual field names (for $ field detection).', 'background:#0b6cb5;color:#fff;padding:2px 6px;border-radius:3px;font-weight:600', '');
     document.getElementById('map-loading').style.display = 'none';
   } catch(err){
     showError('Unexpected error', err.message + '<br><br>Check browser console (F12) for stack trace.');

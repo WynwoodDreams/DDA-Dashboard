@@ -248,9 +248,9 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 <section class="kpis">
   <div class="kpi"><div class="label">DDA Area</div><div class="value" id="kpi-area">--</div><div class="delta">Sq Miles</div></div>
   <div class="kpi"><div class="label">DDA Permits</div><div class="value" id="kpi-permits">--</div><div class="delta" id="kpi-permits-sub">+ Nearby County</div></div>
-  <div class="kpi"><div class="label">Last 30 Days</div><div class="value" id="kpi-30d">--</div><div class="delta">New Activity</div></div>
-  <div class="kpi"><div class="label">CIP Projects</div><div class="value" id="kpi-cip">--</div><div class="delta">Capital Improvement</div></div>
-  <div class="kpi"><div class="label">Permit Types</div><div class="value" id="kpi-types">--</div><div class="delta">Distinct Categories</div></div>
+  <div class="kpi"><div class="label">DDA Investment</div><div class="value" id="kpi-invest">--</div><div class="delta" id="kpi-invest-sub">Declared Permit Value</div></div>
+  <div class="kpi"><div class="label">Last 30 Days</div><div class="value" id="kpi-30d">--</div><div class="delta" id="kpi-30d-sub">New Activity</div></div>
+  <div class="kpi"><div class="label">CIP Pipeline</div><div class="value" id="kpi-cip">--</div><div class="delta" id="kpi-cip-sub">Capital Improvement</div></div>
 </section>
 
 <section class="filterbar">
@@ -302,6 +302,7 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
         <svg></svg>
         <div class="graph-controls" id="graph-controls" style="display:none">
           <button id="g-rotate" title="Toggle slow rotation">↻ Rotate</button>
+          <button id="g-size" title="Size nodes by declared $ value">$ Size</button>
           <button id="g-bundle" title="Bundle proximity edges (FDEB)">≋ Bundle</button>
           <button id="g-reheat" title="Reheat the simulation">↯ Reheat</button>
           <button id="g-reset" title="Reset zoom &amp; layout">⤢ Reset</button>
@@ -374,8 +375,8 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
     <div class="body" style="padding:0">
       <div class="table-wrap">
         <table id="permit-table">
-          <thead><tr><th>Date</th><th>Address</th><th>Type</th><th>Status</th></tr></thead>
-          <tbody><tr><td colspan="4" style="padding:24px;text-align:center;color:var(--muted)">Loading<span class="loading-inner" style="display:inline-flex"></span></td></tr></tbody>
+          <thead><tr><th>Date</th><th>Address</th><th>Type</th><th style="text-align:right">Value</th><th>Status</th></tr></thead>
+          <tbody><tr><td colspan="5" style="padding:24px;text-align:center;color:var(--muted)">Loading<span class="loading-inner" style="display:inline-flex"></span></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -424,7 +425,9 @@ const FIELDS = {
   scope:        ['ScopeOfWork','WORK_DESC','Description','SCOPE','WorkDescription'],
   address:      ['FULLADDR','Address','ADDRESS','FullAddress','StreetAddress','SiteAddress','LOCATION_ADDRESS'],
   number:       ['PermitNumber','PERMITNUMBER','PERMIT_NO','PermitNo','PermitID'],
-  folio:        ['Folio','FOLIO','FolioNumber']
+  folio:        ['Folio','FOLIO','FolioNumber'],
+  valuation:    ['EstimatedCost','EstimatedValue','ValuationAmount','JobValue','TotalValue','ConstructionValue','TotalCost','ProjectCost','Cost','Valuation','EST_COST','JOB_VALUE','DeclaredValue'],
+  cipBudget:    ['Budget','EstimatedCost','TotalCost','ProjectCost','Cost','EstimatedBudget','TotalBudget','BudgetAmount','Funding','FundingAmount']
 };
 
 // =====================================================================
@@ -446,6 +449,7 @@ let graphZoomBehavior = null;
 let pinnedNodeId = null;
 const activeTypeFilter = new Set();   // empty = show all
 let graphBundleOn = false;
+let graphSizeByValue = false;          // false = size by degree, true = by $ value
 let scrubberWindow = null;             // [startMs, endMs] or null = show all
 let scrubberPlaying = false;
 let scrubberPlayRAF = null;
@@ -459,6 +463,25 @@ function pick(props, keys){
     if(props[k] != null && props[k] !== '') return props[k];
   }
   return null;
+}
+function num(v){
+  if(v == null || v === '') return NaN;
+  if(typeof v === 'number') return isFinite(v) ? v : NaN;
+  const n = parseFloat(String(v).replace(/[$,\s]/g, ''));
+  return isNaN(n) ? NaN : n;
+}
+function getValuation(props){ return num(pick(props, FIELDS.valuation)); }
+function getCipBudget(props){ return num(pick(props, FIELDS.cipBudget)); }
+function fmtMoney(n){
+  if(!isFinite(n) || n <= 0) return '—';
+  if(n >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+  if(n >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if(n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'k';
+  return '$' + Math.round(n).toLocaleString();
+}
+function fmtMoneyFull(n){
+  if(!isFinite(n) || n <= 0) return '—';
+  return '$' + Math.round(n).toLocaleString();
 }
 function fmtDate(v){
   if(v == null || v === '') return '--';
@@ -727,6 +750,10 @@ function permitPopupHTML(p, sourceKey){
   const scope = pick(p, FIELDS.scope);
   const srcLabel = sourceKey === 'county' ? 'Miami-Dade County' : 'City of Miami';
   const srcColor = sourceKey === 'county' ? '#8b5cf6' : '#0b6cb5';
+  const val = getValuation(p);
+  const valRow = isFinite(val) && val > 0
+    ? `<br><span style="color:#97a3b2">Value</span> <b style="color:#0b6cb5">${fmtMoneyFull(val)}</b>`
+    : '';
   return `
     <div style="min-width:220px">
       <div style="color:${srcColor};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">${srcLabel} Permit</div>
@@ -736,7 +763,7 @@ function permitPopupHTML(p, sourceKey){
         <span style="color:#97a3b2">Type&nbsp;&nbsp;</span> ${pick(p,FIELDS.permitType) || '—'}<br>
         <span style="color:#97a3b2">Status</span> ${pick(p,FIELDS.permitStatus) || '—'}<br>
         <span style="color:#97a3b2">Date&nbsp;&nbsp;</span> ${fmtDate(pick(p,FIELDS.permitDate))}<br>
-        <span style="color:#97a3b2">Folio&nbsp;</span> ${pick(p,FIELDS.folio) || '—'}
+        <span style="color:#97a3b2">Folio&nbsp;</span> ${pick(p,FIELDS.folio) || '—'}${valRow}
         ${scope ? `<br><span style="color:#97a3b2">Scope</span> <span style="color:#3a4656">${String(scope).slice(0,180)}</span>` : ''}
       </div>
     </div>`;
@@ -867,20 +894,29 @@ function renderTypeChart(){
 }
 
 function renderTimelineChart(){
-  const byMonth = {};
+  const byMonthCount = {}, byMonthValue = {};
   const now = new Date();
   for(let i=11; i>=0; i--){
     const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
-    byMonth[d.toISOString().slice(0,7)] = 0;
+    const k = d.toISOString().slice(0,7);
+    byMonthCount[k] = 0;
+    byMonthValue[k] = 0;
   }
   view.forEach(f=>{
-    const ms = toMs(pick(f.properties||{}, FIELDS.permitDate));
+    const p = f.properties || {};
+    const ms = toMs(pick(p, FIELDS.permitDate));
     if(isNaN(ms)) return;
     const k = new Date(ms).toISOString().slice(0,7);
-    if(k in byMonth) byMonth[k]++;
+    if(k in byMonthCount){
+      byMonthCount[k]++;
+      const v = getValuation(p);
+      if(isFinite(v) && v > 0) byMonthValue[k] += v;
+    }
   });
-  const labels = Object.keys(byMonth);
-  const data = Object.values(byMonth);
+  const labels = Object.keys(byMonthCount);
+  const counts = Object.values(byMonthCount);
+  const values = Object.values(byMonthValue);
+  const hasValues = values.some(v => v > 0);
 
   if(charts.timeline) charts.timeline.destroy();
   const ctx = document.getElementById('timeline-chart').getContext('2d');
@@ -888,19 +924,64 @@ function renderTimelineChart(){
   grad.addColorStop(0,'rgba(11,108,181,.28)');
   grad.addColorStop(1,'rgba(11,108,181,.01)');
 
+  const datasets = [{
+    label:'Permits',
+    data: counts,
+    borderColor:'#0b6cb5',
+    backgroundColor:grad,
+    fill:true, tension:.25,
+    pointRadius:3, pointHoverRadius:6,
+    pointBackgroundColor:'#0b6cb5',
+    pointBorderColor:'#fff', pointBorderWidth:2,
+    borderWidth:2.5,
+    yAxisID:'y'
+  }];
+  if(hasValues){
+    datasets.push({
+      label:'Declared Value',
+      data: values,
+      borderColor:'#16a34a',
+      backgroundColor:'transparent',
+      fill:false, tension:.25,
+      pointRadius:2.5, pointHoverRadius:5,
+      pointBackgroundColor:'#16a34a',
+      pointBorderColor:'#fff', pointBorderWidth:1.5,
+      borderWidth:2,
+      borderDash:[4,3],
+      yAxisID:'y2'
+    });
+  }
+
+  const scales = {
+    x: { ...baseScale, grid:{ display:false } },
+    y: { ...baseScale, beginAtZero:true, title:{ display:hasValues, text:'permits', color:'#0b6cb5', font:{size:9,weight:'600'} } }
+  };
+  if(hasValues){
+    scales.y2 = {
+      ...baseScale,
+      position:'right',
+      beginAtZero:true,
+      grid:{ display:false },
+      ticks:{ ...baseScale.ticks, callback:v => fmtMoney(v) },
+      title:{ display:true, text:'$ value', color:'#16a34a', font:{size:9,weight:'600'} }
+    };
+  }
+
   charts.timeline = new Chart(ctx, {
     type:'line',
-    data:{ labels, datasets:[{
-      data,
-      borderColor:'#0b6cb5',
-      backgroundColor:grad,
-      fill:true, tension:.25,
-      pointRadius:3, pointHoverRadius:6,
-      pointBackgroundColor:'#0b6cb5',
-      pointBorderColor:'#fff', pointBorderWidth:2,
-      borderWidth:2.5
-    }]},
-    options:{ ...baseOpts, scales:{ x: { ...baseScale, grid:{ display:false } }, y: { ...baseScale, beginAtZero:true } } }
+    data:{ labels, datasets },
+    options:{
+      ...baseOpts,
+      plugins:{
+        ...baseOpts.plugins,
+        legend: hasValues ? { display:true, position:'top', labels:{ boxWidth:10, boxHeight:10, padding:8, font:{size:10}, color:'#5d6b7d', usePointStyle:true, pointStyle:'line' } } : { display:false },
+        tooltip:{
+          ...baseOpts.plugins.tooltip,
+          callbacks:{ label:(c)=> c.dataset.yAxisID === 'y2' ? ` ${c.dataset.label}: ${fmtMoney(c.parsed.y)}` : ` ${c.dataset.label}: ${c.parsed.y}` }
+        }
+      },
+      scales
+    }
   });
 }
 
@@ -920,7 +1001,7 @@ function renderTable(){
 
   const tbody = document.querySelector('#permit-table tbody');
   if(!rows.length){
-    tbody.innerHTML = '<tr><td colspan="4" style="padding:24px;text-align:center;color:var(--muted)">No permit records match the current filters</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" style="padding:24px;text-align:center;color:var(--muted)">No permit records match the current filters</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(({p,f}) => {
@@ -928,10 +1009,15 @@ function renderTable(){
     const status = pick(p, FIELDS.permitStatus) || '--';
     const type = (pick(p, FIELDS.permitType) || '--').toString();
     const addr = (pick(p, FIELDS.address) || '--').toString();
+    const val = getValuation(p);
+    const valCell = isFinite(val) && val > 0
+      ? `<span title="${fmtMoneyFull(val)}" style="color:var(--text);font-weight:600">${fmtMoney(val)}</span>`
+      : `<span style="color:var(--dim)">—</span>`;
     return `<tr data-lat="${f.geometry.coordinates[1]}" data-lng="${f.geometry.coordinates[0]}">
       <td style="color:var(--muted);white-space:nowrap;font-family:var(--mono);font-size:11px">${fmtDate(pick(p,FIELDS.permitDate))}</td>
-      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${addr}</td>
-      <td style="color:var(--muted);font-size:11px">${type.length>26?type.slice(0,26)+'…':type}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${addr}</td>
+      <td style="color:var(--muted);font-size:11px">${type.length>24?type.slice(0,24)+'…':type}</td>
+      <td style="text-align:right;font-family:var(--mono);font-size:11px;white-space:nowrap">${valCell}</td>
       <td><span class="pill ${cls}">${status.length>14?status.slice(0,14):status}</span></td>
     </tr>`;
   }).join('');
@@ -1002,6 +1088,7 @@ function buildGraph(){
       addrKey: normalizeAddress(pick(p, FIELDS.address)),
       folio: pick(p, FIELDS.folio) || null,
       date: toMs(pick(p, FIELDS.permitDate)),
+      value: getValuation(p),
       lat, lng,
       inDDA: f._inDDA !== false,
       _f: f
@@ -1019,6 +1106,7 @@ function buildGraph(){
       type: 'CAPITAL IMPROVEMENT',
       status: p.Status || p.STATUS || '',
       address: p.ProjectName || p.NAME || p.Project || p.PROJECT_NAME || p.Title || 'CIP',
+      value: getCipBudget(p),
       lat, lng,
       inDDA: true,
       _f: f
@@ -1279,7 +1367,18 @@ function renderGraph(){
   applyTypeFilter();
 
   const colorOf = n => n.kind === 'cip' ? '#0891b2' : (typeColors.get(n.type) || '#94a3b8');
-  const radiusOf = n => n.kind === 'cip' ? 7 : Math.max(3, Math.min(12, 3 + Math.sqrt(n.degree)));
+  // Pre-compute log-value range for $ sizing mode
+  const valuedNodes = nodes.filter(n => isFinite(n.value) && n.value > 0);
+  const minLogV = valuedNodes.length ? Math.log10(Math.min(...valuedNodes.map(n => n.value))) : 0;
+  const maxLogV = valuedNodes.length ? Math.log10(Math.max(...valuedNodes.map(n => n.value))) : 1;
+  const radiusOf = n => {
+    if(n.kind === 'cip') return 7;
+    if(graphSizeByValue && isFinite(n.value) && n.value > 0 && maxLogV > minLogV){
+      const t = (Math.log10(n.value) - minLogV) / (maxLogV - minLogV);
+      return 3 + t * 14;     // 3..17 px
+    }
+    return Math.max(3, Math.min(12, 3 + Math.sqrt(n.degree || 0)));
+  };
 
   // Layered structure: svg > zoom-layer > rotate-layer > contents
   const zoomLayer = svgSel.append('g').attr('class', 'gz');
@@ -1372,12 +1471,16 @@ function renderGraph(){
            <button class="tt-btn secondary" data-act="unpin">Unpin</button>
          </div>`
       : '';
+    const valRow = isFinite(d.value) && d.value > 0
+      ? `<div class="tt-label" style="margin-top:4px">Value</div><div class="tt-val" style="color:#7ec5f4;font-weight:600">${fmtMoneyFull(d.value)}</div>`
+      : '';
     return `
       <div class="tt-label">${src}${d.inDDA ? ' · IN DDA' : ''}${pinTag}</div>
       <div class="tt-val" style="margin:2px 0 6px;font-weight:600">${d.number || d.address || ''}</div>
       <div class="tt-label">Type</div><div class="tt-val">${d.type}</div>
       ${d.status ? `<div class="tt-label" style="margin-top:4px">Status</div><div class="tt-val">${d.status}</div>` : ''}
       ${d.date ? `<div class="tt-label" style="margin-top:4px">Date</div><div class="tt-val">${fmtDate(d.date)}</div>` : ''}
+      ${valRow}
       <div class="tt-label" style="margin-top:4px">Connections</div><div class="tt-val">${d.degree}</div>
       ${actions}`;
   };
@@ -1802,6 +1905,24 @@ function renderGraph(){
       graphRotateAngle = 0;
     }
   });
+  const sizeBtn = ctlBtn('g-size');
+  sizeBtn.classList.toggle('active', graphSizeByValue);
+  sizeBtn.textContent = graphSizeByValue ? '$ Sized' : '$ Size';
+  sizeBtn.disabled = valuedNodes.length === 0;
+  sizeBtn.title = valuedNodes.length === 0
+    ? 'No valuation field exposed in current data'
+    : `Size by $ value (${valuedNodes.length} priced nodes)`;
+  sizeBtn.addEventListener('click', () => {
+    graphSizeByValue = !graphSizeByValue;
+    sizeBtn.classList.toggle('active', graphSizeByValue);
+    sizeBtn.textContent = graphSizeByValue ? '$ Sized' : '$ Size';
+    nodeSel.attr('r', radiusOf);
+    // Re-collide so larger nodes don't overlap
+    sim.force('collide', d3.forceCollide().radius(d => radiusOf(d) + 1.5));
+    sim.alpha(0.4).restart();
+    setTimeout(() => sim.alphaTarget(0), 3000);
+  });
+
   const bundleBtn = ctlBtn('g-bundle');
   bundleBtn.classList.toggle('active', graphBundleOn);
   bundleBtn.textContent = graphBundleOn ? '≋ Bundled' : '≋ Bundle';
@@ -1901,20 +2022,41 @@ function renderKPIs(){
   document.getElementById('kpi-permits-sub').textContent = nearby > 0
     ? `+ ${nearby.toLocaleString()} nearby county`
     : 'Inside DDA boundary';
-  document.getElementById('kpi-cip').textContent = cipData.length.toLocaleString();
 
+  // DDA Investment: sum of declared permit valuations inside DDA
   const cutoff = Date.now() - 30*24*3600*1000;
-  let recent = 0;
-  const types = new Set();
+  let recent = 0, recentVal = 0;
+  let totalVal = 0, withVal = 0;
   inDDA.forEach(f=>{
     const p = f.properties || {};
     const ms = toMs(pick(p, FIELDS.permitDate));
-    if(!isNaN(ms) && ms >= cutoff) recent++;
-    const tp = pick(p, FIELDS.permitType);
-    if(tp) types.add(tp);
+    const v = getValuation(p);
+    if(isFinite(v) && v > 0){ totalVal += v; withVal++; }
+    if(!isNaN(ms) && ms >= cutoff){
+      recent++;
+      if(isFinite(v) && v > 0) recentVal += v;
+    }
   });
+  document.getElementById('kpi-invest').textContent = withVal > 0 ? fmtMoney(totalVal) : '—';
+  document.getElementById('kpi-invest-sub').textContent = withVal > 0
+    ? `Across ${withVal.toLocaleString()} priced permits`
+    : 'Field not exposed in feed';
+
   document.getElementById('kpi-30d').textContent = recent.toLocaleString();
-  document.getElementById('kpi-types').textContent = types.size;
+  document.getElementById('kpi-30d-sub').textContent = recentVal > 0
+    ? `${fmtMoney(recentVal)} in last 30d`
+    : 'New activity';
+
+  // CIP Pipeline: count + sum of budgets
+  let cipTotal = 0, cipWithBudget = 0;
+  cipData.forEach(f => {
+    const v = getCipBudget(f.properties || {});
+    if(isFinite(v) && v > 0){ cipTotal += v; cipWithBudget++; }
+  });
+  document.getElementById('kpi-cip').textContent = cipData.length.toLocaleString();
+  document.getElementById('kpi-cip-sub').textContent = cipWithBudget > 0
+    ? `${fmtMoney(cipTotal)} pipeline`
+    : 'Capital Improvement';
 }
 
 // =====================================================================

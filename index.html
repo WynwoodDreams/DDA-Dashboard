@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
 <style>
 :root{
   --bg:#eef1f5;
@@ -123,8 +124,55 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .loading-inner::after{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent);margin-left:10px;animation:blink .8s infinite}
 @keyframes blink{50%{opacity:0}}
 
-.legend{position:absolute;bottom:14px;left:14px;background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:10px 12px;font-size:10px;font-weight:500;color:var(--muted);z-index:400;display:flex;flex-direction:column;gap:5px}
+.legend{position:absolute;bottom:14px;left:14px;background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:10px 12px;font-size:10px;font-weight:500;color:var(--muted);z-index:400;display:flex;flex-direction:column;gap:5px;max-height:calc(100% - 28px);overflow-y:auto}
 .legend span{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle}
+.legend .lg-section{font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:var(--dim);margin-top:4px;font-weight:700}
+.legend .lg-section:first-child{margin-top:0}
+
+/* ==== VIEW TOGGLE (Map / Network) ==== */
+.view-toggle{display:inline-flex;background:var(--panel-2);border:1px solid var(--border-2);border-radius:8px;padding:2px;gap:2px}
+.view-toggle button{appearance:none;background:transparent;border:0;color:var(--muted);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:5px 12px;border-radius:6px;cursor:pointer;letter-spacing:.02em}
+.view-toggle button.active{background:#fff;color:var(--accent);box-shadow:var(--shadow)}
+
+/* ==== NETWORK GRAPH ==== */
+#graph{position:absolute;inset:0;background:radial-gradient(circle at center,#fbfcfd 0%,#eef1f5 100%);display:none}
+#graph.active{display:block}
+#map.hidden{display:none}
+#graph svg{width:100%;height:100%;cursor:grab}
+#graph svg:active{cursor:grabbing}
+.gnode{cursor:pointer;transition:opacity .15s}
+.gnode-dda{filter:drop-shadow(0 0 3px rgba(11,108,181,.55))}
+.glink{pointer-events:none}
+.graph-stats{position:absolute;top:14px;right:14px;background:rgba(255,255,255,.96);border:1px solid var(--border);border-radius:8px;box-shadow:var(--shadow);padding:10px 13px;font-size:10px;color:var(--muted);z-index:400;font-family:var(--mono);min-width:160px;line-height:1.7}
+.graph-stats b{color:var(--text);font-weight:600}
+.graph-tip{position:absolute;background:#16202e;color:#fff;border-radius:8px;padding:9px 12px;font-size:11px;line-height:1.5;pointer-events:none;z-index:500;max-width:260px;box-shadow:var(--shadow-lg);opacity:0;transition:opacity .12s;font-family:'Inter',sans-serif}
+.graph-tip.show{opacity:1}
+.graph-tip .tt-label{color:#97a3b2;font-size:9px;text-transform:uppercase;letter-spacing:.05em;font-weight:700}
+.graph-tip .tt-val{color:#fff;font-weight:500}
+
+/* Hover ego-network highlighting */
+.gnode.faded{opacity:.12}
+.glink.faded{stroke-opacity:.04 !important}
+.glink.lit{stroke-opacity:.95 !important;stroke-width:2.5 !important}
+.gnode.lit{stroke:#16202e !important;stroke-width:2.5 !important}
+.gnode.pulse{transform-origin:center center;transform-box:fill-box}
+.gnode-recent{animation:nodepulse 2.2s ease-in-out infinite}
+@keyframes nodepulse{
+  0%,100%{filter:drop-shadow(0 0 0 rgba(217,119,6,0))}
+  50%{filter:drop-shadow(0 0 6px rgba(217,119,6,.85))}
+}
+
+/* Persistent hub label + hover label */
+.glabel{font-family:'Inter',sans-serif;font-size:10px;font-weight:600;fill:#16202e;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:3px;stroke-linejoin:round}
+.glabel.dim{opacity:.55;font-weight:500;font-size:9px}
+.ghover-label{font-family:'Inter',sans-serif;font-size:11px;font-weight:600;fill:#0b6cb5;pointer-events:none;paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+
+/* Graph control buttons (rotate/reset) */
+.graph-controls{position:absolute;top:14px;left:14px;display:flex;gap:6px;z-index:401}
+.graph-controls button{appearance:none;background:rgba(255,255,255,.96);border:1px solid var(--border-2);border-radius:8px;color:var(--muted);font-family:'Inter',sans-serif;font-size:11px;font-weight:600;padding:6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;box-shadow:var(--shadow);transition:all .12s}
+.graph-controls button:hover{color:var(--accent);border-color:var(--accent)}
+.graph-controls button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.graph-controls .ico{display:inline-block;width:10px;height:10px}
 
 .footer{font-size:11px;color:var(--dim);text-align:center;padding:12px;font-weight:500;border-top:1px solid var(--border);margin-top:auto}
 .footer a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--dim)}
@@ -153,13 +201,13 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
   <div class="status">
     <span><span class="dot"></span>Live</span>
     <span class="mono" id="ts">--</span>
-    <span>Source · gis.miami.gov</span>
+    <span>Source · City + County GIS</span>
   </div>
 </header>
 
 <section class="kpis">
   <div class="kpi"><div class="label">DDA Area</div><div class="value" id="kpi-area">--</div><div class="delta">Sq Miles</div></div>
-  <div class="kpi"><div class="label">Permits Shown</div><div class="value" id="kpi-permits">--</div><div class="delta">Current Filter</div></div>
+  <div class="kpi"><div class="label">DDA Permits</div><div class="value" id="kpi-permits">--</div><div class="delta" id="kpi-permits-sub">+ Nearby County</div></div>
   <div class="kpi"><div class="label">Last 30 Days</div><div class="value" id="kpi-30d">--</div><div class="delta">New Activity</div></div>
   <div class="kpi"><div class="label">CIP Projects</div><div class="value" id="kpi-cip">--</div><div class="delta">Capital Improvement</div></div>
   <div class="kpi"><div class="label">Permit Types</div><div class="value" id="kpi-types">--</div><div class="delta">Distinct Categories</div></div>
@@ -194,21 +242,58 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 <section class="grid">
   <div class="panel">
     <div class="head">
-      <h3>Geographic Distribution</h3>
-      <div class="layer-toggles">
-        <span class="toggle active" data-layer="permits"><span class="swatch" style="background:var(--good)"></span>Permits</span>
-        <span class="toggle active" data-layer="cip"><span class="swatch" style="background:var(--cyan)"></span>CIP</span>
-        <span class="toggle active" data-layer="dda"><span class="swatch" style="background:var(--accent);border-radius:2px"></span>Boundary</span>
+      <h3 id="view-title">Geographic Distribution</h3>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="view-toggle" id="view-toggle">
+          <button data-view="map" class="active">Map</button>
+          <button data-view="graph">Network</button>
+        </div>
+        <div class="layer-toggles" id="map-layer-toggles">
+          <span class="toggle active" data-layer="permits"><span class="swatch" style="background:var(--good)"></span>City Permits</span>
+          <span class="toggle active" data-layer="county"><span class="swatch" style="background:#8b5cf6"></span>County</span>
+          <span class="toggle active" data-layer="cip"><span class="swatch" style="background:var(--cyan)"></span>CIP</span>
+          <span class="toggle active" data-layer="dda"><span class="swatch" style="background:var(--accent);border-radius:2px"></span>DDA</span>
+        </div>
       </div>
     </div>
     <div class="body" style="padding:0">
       <div id="map"></div>
-      <div class="legend">
-        <div><span style="background:#16a34a"></span>Permit · Active / Issued</div>
-        <div><span style="background:#d97706"></span>Permit · Pending</div>
-        <div><span style="background:#dc2626"></span>Permit · Denied / Void</div>
+      <div id="graph">
+        <svg></svg>
+        <div class="graph-controls" id="graph-controls" style="display:none">
+          <button id="g-rotate" title="Toggle slow rotation">↻ Rotate</button>
+          <button id="g-reheat" title="Reheat the simulation">↯ Reheat</button>
+          <button id="g-reset" title="Reset zoom &amp; layout">⤢ Reset</button>
+        </div>
+      </div>
+      <div class="legend" id="map-legend">
+        <div class="lg-section">Permits</div>
+        <div><span style="background:#16a34a"></span>Active / Issued</div>
+        <div><span style="background:#d97706"></span>Pending</div>
+        <div><span style="background:#dc2626"></span>Denied / Void</div>
+        <div class="lg-section">Source</div>
+        <div><span style="background:#0b6cb5"></span>City of Miami</div>
+        <div><span style="background:#8b5cf6;border-radius:2px"></span>Miami-Dade County</div>
         <div><span style="background:#0891b2"></span>CIP Project</div>
       </div>
+      <div class="legend" id="graph-legend" style="display:none">
+        <div class="lg-section">Node = Permit / Project</div>
+        <div class="lg-section" id="graph-color-section">By Application Type</div>
+        <div id="graph-color-legend"></div>
+        <div class="lg-section">Edge meaning</div>
+        <div><span style="background:#0b6cb5;border-radius:0;width:14px;height:2px"></span>Same Folio</div>
+        <div><span style="background:#0891b2;border-radius:0;width:14px;height:2px"></span>Same Address</div>
+        <div><span style="background:#cbd5e1;border-radius:0;width:14px;height:2px"></span>Spatial Proximity</div>
+        <div class="lg-section">Highlight</div>
+        <div><span style="background:transparent;border:2px solid #0b6cb5"></span>Inside DDA Boundary</div>
+      </div>
+      <div class="graph-stats" id="graph-stats" style="display:none">
+        <div><b id="g-nodes">--</b> nodes</div>
+        <div><b id="g-edges">--</b> edges</div>
+        <div><b id="g-dda">--</b> in DDA</div>
+        <div style="color:var(--dim);font-size:9px;margin-top:4px">scroll · zoom &nbsp; drag · pan</div>
+      </div>
+      <div class="graph-tip" id="graph-tip"></div>
       <div id="map-loading" class="loading"><div class="loading-inner">Initializing</div></div>
     </div>
   </div>
@@ -243,9 +328,9 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 </section>
 
 <div class="footer">
-  Data · <a href="https://gis.miami.gov/gis/rest/services" target="_blank">City of Miami GIS REST</a>
-  &nbsp;·&nbsp; DDA Boundary · All City Permits · CIP Public
-  &nbsp;·&nbsp; Spatial filter · Turf.js point-in-polygon
+  Data · <a href="https://gis.miami.gov/gis/rest/services" target="_blank">City of Miami GIS</a>
+  &nbsp;·&nbsp; <a href="https://gis-mdc.opendata.arcgis.com/" target="_blank">Miami-Dade County Open Data</a>
+  &nbsp;·&nbsp; Network edges synthesized from Folio · Address · Spatial proximity
   &nbsp;·&nbsp; <a href="https://www.miamidda.com" target="_blank">Miami DDA</a>
 </div>
 
@@ -254,31 +339,55 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 // CONFIG
 // =====================================================================
 const ENDPOINTS = {
-  dda:     'https://gis.miami.gov/gis/rest/services/Zoning/DDA_Boundary/MapServer/0/query',
-  permits: 'https://gis.miami.gov/gis/rest/services/Maps/AllCityPermits/MapServer/0/query',
-  cip:     'https://gis.miami.gov/gis/rest/services/Maps/Miami_CIP_Public/MapServer/0/query'
+  dda: 'https://gis.miami.gov/gis/rest/services/Zoning/DDA_Boundary/MapServer/0/query',
+  cip: 'https://gis.miami.gov/gis/rest/services/Maps/Miami_CIP_Public/MapServer/0/query'
 };
+
+// Multiple permit sources — fetched in parallel, merged, gracefully degrade if any 404s
+const PERMIT_SOURCES = [
+  {
+    key: 'city',
+    label: 'City of Miami',
+    url: 'https://gis.miami.gov/gis/rest/services/Maps/AllCityPermits/MapServer/0/query',
+    color: '#0b6cb5',
+    recordCount: 4000
+  },
+  {
+    key: 'county',
+    label: 'Miami-Dade County',
+    url: 'https://services2.arcgis.com/CyVvlIiUfRBmMQuu/arcgis/rest/services/Building_Permits_Applications_view/FeatureServer/0/query',
+    color: '#8b5cf6',
+    recordCount: 4000
+  }
+];
 
 // Field name candidates — try multiple variants because ArcGIS schemas drift
 const FIELDS = {
-  permitDate:   ['PermitStatusDate','PermitDate','IssueDate','APPLDATE','IssuedDate'],
-  permitStatus: ['PermitStatus','STATUS','Status'],
-  permitType:   ['ApplicationType','PermitType','PERMIT_TYPE','WorkType','PERMITTYPE'],
-  scope:        ['ScopeOfWork','WORK_DESC','Description','SCOPE'],
-  address:      ['FULLADDR','Address','ADDRESS','FullAddress'],
-  number:       ['PermitNumber','PERMITNUMBER','PERMIT_NO','PermitNo'],
-  folio:        ['Folio','FOLIO']
+  permitDate:   ['PermitStatusDate','PermitDate','IssueDate','APPLDATE','IssuedDate','ISSUEDDATE','APPLIED_DATE','IssueDateTime'],
+  permitStatus: ['PermitStatus','STATUS','Status','PermitStatusDescription'],
+  permitType:   ['ApplicationType','PermitType','PERMIT_TYPE','WorkType','PERMITTYPE','PermitTypeDescription'],
+  scope:        ['ScopeOfWork','WORK_DESC','Description','SCOPE','WorkDescription'],
+  address:      ['FULLADDR','Address','ADDRESS','FullAddress','StreetAddress','SiteAddress','LOCATION_ADDRESS'],
+  number:       ['PermitNumber','PERMITNUMBER','PERMIT_NO','PermitNo','PermitID'],
+  folio:        ['Folio','FOLIO','FolioNumber']
 };
 
 // =====================================================================
 // STATE
 // =====================================================================
-let map, ddaLayer, permitLayer, cipLayer;
+let map, ddaLayer, permitLayer, cipLayer, countyLayer;
 let permitsData = [], cipData = [], ddaFeature = null;
 let view = [];                              // permits after filters applied
 const charts = {};
 const filters = { status:'', type:'', days:0, q:'' };
-const layerOn = { permits:true, cip:true, dda:true };
+const layerOn = { permits:true, county:true, cip:true, dda:true };
+let activeView = 'map';                     // 'map' | 'graph'
+let graphSim = null;
+let graphState = null;                      // last built {nodes,edges,typeColors}
+let graphRotate = false;
+let graphRotateRAF = null;
+let graphRotateAngle = 0;
+let graphZoomBehavior = null;
 
 // =====================================================================
 // HELPERS
@@ -357,30 +466,63 @@ async function loadDDA(){
 }
 
 // =====================================================================
-// FETCH · PERMITS (envelope query + point-in-polygon refine)
+// FETCH · PERMITS (multi-source: city + county, envelope + DDA refine)
 // =====================================================================
-async function loadPermits(){
-  const b = ddaLayer.getBounds();
+async function fetchSource(src, bbox){
   const params = new URLSearchParams({
     where:'1=1',
     outFields:'*',
-    geometry: `${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`,
+    geometry: `${bbox.getWest()},${bbox.getSouth()},${bbox.getEast()},${bbox.getNorth()}`,
     geometryType:'esriGeometryEnvelope',
     inSR:'4326',
     spatialRel:'esriSpatialRelIntersects',
     f:'geojson',
-    resultRecordCount:'4000'
+    resultRecordCount: String(src.recordCount || 2000)
   });
-  const res = await fetch(`${ENDPOINTS.permits}?${params}`);
-  if(!res.ok) throw new Error(`Permits HTTP ${res.status}`);
-  const gj = await res.json();
-  const feats = gj.features || [];
+  try{
+    const res = await fetch(`${src.url}?${params}`);
+    if(!res.ok){ console.warn(`[${src.key}] HTTP ${res.status}`); return []; }
+    const gj = await res.json();
+    return (gj.features || []).map(f => { f._source = src.key; return f; });
+  } catch(e){
+    console.warn(`[${src.key}] fetch failed`, e.message);
+    return [];
+  }
+}
 
-  permitsData = feats.filter(f=>{
-    if(!f.geometry || f.geometry.type !== 'Point') return false;
-    try{ return turf.booleanPointInPolygon(f, ddaFeature); }
-    catch{ return false; }
+async function loadPermits(){
+  const b = ddaLayer.getBounds();
+  // Widen bbox slightly for county query so we can still see context near boundary
+  const bigB = b.pad(0.25);
+  const results = await Promise.all(PERMIT_SOURCES.map(s =>
+    fetchSource(s, s.key === 'county' ? bigB : b)
+  ));
+  const merged = results.flat();
+
+  // Dedupe by (source + permit number), keep all if no number
+  const seen = new Set();
+  const deduped = [];
+  for(const f of merged){
+    const num = pick(f.properties || {}, FIELDS.number);
+    const key = num ? `${f._source}|${num}` : `${f._source}|${deduped.length}`;
+    if(seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(f);
+  }
+
+  // Tag DDA membership (do NOT filter — we keep nearby county permits for context, mark with _inDDA)
+  permitsData = deduped.filter(f => f.geometry && f.geometry.type === 'Point').map(f => {
+    try{ f._inDDA = turf.booleanPointInPolygon(f, ddaFeature); }
+    catch{ f._inDDA = false; }
+    return f;
   });
+
+  // For city source, restrict to DDA only (city dataset is already small)
+  permitsData = permitsData.filter(f => f._source === 'county' || f._inDDA);
+
+  const cityCount = permitsData.filter(f => f._source === 'city').length;
+  const cntyCount = permitsData.filter(f => f._source === 'county').length;
+  console.log(`[permits] city=${cityCount} county=${cntyCount} (county incl. ${permitsData.filter(f=>f._source==='county'&&f._inDDA).length} inside DDA)`);
 }
 
 // =====================================================================
@@ -421,6 +563,8 @@ async function loadCIP(){
 function applyFilters(){
   const now = Date.now();
   view = permitsData.filter(f=>{
+    if(f._source === 'county' && !layerOn.county) return false;
+    if(f._source === 'city'   && !layerOn.permits) return false;
     const p = f.properties || {};
     if(filters.status){
       if((pick(p,FIELDS.permitStatus) || '').toUpperCase() !== filters.status) return false;
@@ -447,6 +591,7 @@ function applyFilters(){
   renderTimelineChart();
   renderTable();
   updateResultCount();
+  if(activeView === 'graph') renderGraph();
 }
 
 function updateResultCount(){
@@ -501,12 +646,15 @@ function wireLayerToggles(){
       el.classList.toggle('active', layerOn[key]);
       el.classList.toggle('off', !layerOn[key]);
       syncLayers();
+      // Source toggles (permits/county) also re-filter charts, table, KPIs, graph
+      if(key === 'permits' || key === 'county') applyFilters();
     });
   });
 }
 
 function syncLayers(){
   if(permitLayer){ layerOn.permits ? permitLayer.addTo(map) : map.removeLayer(permitLayer); }
+  if(countyLayer){ layerOn.county ? countyLayer.addTo(map) : map.removeLayer(countyLayer); }
   if(cipLayer){ layerOn.cip ? cipLayer.addTo(map) : map.removeLayer(cipLayer); }
   if(ddaLayer){ layerOn.dda ? ddaLayer.addTo(map) : map.removeLayer(ddaLayer); }
 }
@@ -514,35 +662,51 @@ function syncLayers(){
 // =====================================================================
 // RENDER · MARKERS
 // =====================================================================
+function permitPopupHTML(p, sourceKey){
+  const scope = pick(p, FIELDS.scope);
+  const srcLabel = sourceKey === 'county' ? 'Miami-Dade County' : 'City of Miami';
+  const srcColor = sourceKey === 'county' ? '#8b5cf6' : '#0b6cb5';
+  return `
+    <div style="min-width:220px">
+      <div style="color:${srcColor};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">${srcLabel} Permit</div>
+      <div style="font-weight:700;margin:5px 0;color:#16202e;font-family:'JetBrains Mono',monospace">${pick(p,FIELDS.number) || '—'}</div>
+      <div style="color:#5d6b7d;font-size:12px;margin-bottom:8px">${pick(p,FIELDS.address) || '—'}</div>
+      <div style="font-size:11px;line-height:1.8">
+        <span style="color:#97a3b2">Type&nbsp;&nbsp;</span> ${pick(p,FIELDS.permitType) || '—'}<br>
+        <span style="color:#97a3b2">Status</span> ${pick(p,FIELDS.permitStatus) || '—'}<br>
+        <span style="color:#97a3b2">Date&nbsp;&nbsp;</span> ${fmtDate(pick(p,FIELDS.permitDate))}<br>
+        <span style="color:#97a3b2">Folio&nbsp;</span> ${pick(p,FIELDS.folio) || '—'}
+        ${scope ? `<br><span style="color:#97a3b2">Scope</span> <span style="color:#3a4656">${String(scope).slice(0,180)}</span>` : ''}
+      </div>
+    </div>`;
+}
+
 function renderPermitMarkers(){
   if(permitLayer) map.removeLayer(permitLayer);
+  if(countyLayer) map.removeLayer(countyLayer);
   permitLayer = L.layerGroup();
+  countyLayer = L.layerGroup();
 
   view.forEach(f=>{
     const [lng,lat] = f.geometry.coordinates;
     const p = f.properties || {};
     const cls = statusClass(pick(p, FIELDS.permitStatus));
     const color = statusColor(cls);
+    const isCounty = f._source === 'county';
+    // County permits get a square-ish marker via doubled border; city permits stay round
+    const ringColor = isCounty ? '#8b5cf6' : '#fff';
     const m = L.circleMarker([lat,lng], {
-      radius:5, color:'#fff', fillColor:color, fillOpacity:.9, weight:1.5
+      radius: isCounty ? 4 : 5,
+      color: ringColor,
+      fillColor: color,
+      fillOpacity: isCounty ? .7 : .9,
+      weight: isCounty ? 2 : 1.5
     });
-    const scope = pick(p, FIELDS.scope);
-    m.bindPopup(`
-      <div style="min-width:220px">
-        <div style="color:#0b6cb5;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Permit Record</div>
-        <div style="font-weight:700;margin:5px 0;color:#16202e;font-family:'JetBrains Mono',monospace">${pick(p,FIELDS.number) || '—'}</div>
-        <div style="color:#5d6b7d;font-size:12px;margin-bottom:8px">${pick(p,FIELDS.address) || '—'}</div>
-        <div style="font-size:11px;line-height:1.8">
-          <span style="color:#97a3b2">Type&nbsp;&nbsp;</span> ${pick(p,FIELDS.permitType) || '—'}<br>
-          <span style="color:#97a3b2">Status</span> ${pick(p,FIELDS.permitStatus) || '—'}<br>
-          <span style="color:#97a3b2">Date&nbsp;&nbsp;</span> ${fmtDate(pick(p,FIELDS.permitDate))}<br>
-          <span style="color:#97a3b2">Folio&nbsp;</span> ${pick(p,FIELDS.folio) || '—'}
-          ${scope ? `<br><span style="color:#97a3b2">Scope</span> <span style="color:#3a4656">${String(scope).slice(0,180)}</span>` : ''}
-        </div>
-      </div>`);
-    permitLayer.addLayer(m);
+    m.bindPopup(permitPopupHTML(p, f._source));
+    (isCounty ? countyLayer : permitLayer).addLayer(m);
   });
   if(layerOn.permits) permitLayer.addTo(map);
+  if(layerOn.county) countyLayer.addTo(map);
 }
 
 function renderCIPMarkers(){
@@ -716,18 +880,15 @@ function renderTable(){
       const lat = parseFloat(tr.dataset.lat);
       const lng = parseFloat(tr.dataset.lng);
       if(!isNaN(lat) && !isNaN(lng)){
-        if(!layerOn.permits){
-          layerOn.permits = true;
-          const t = document.querySelector('.toggle[data-layer="permits"]');
-          t.classList.add('active'); t.classList.remove('off');
-          syncLayers();
-        }
+        if(activeView !== 'map') activateView('map');
         map.setView([lat,lng], 18);
-        permitLayer?.eachLayer(l => {
-          const ll = l.getLatLng();
-          if(Math.abs(ll.lat - lat) < 1e-6 && Math.abs(ll.lng - lng) < 1e-6){
-            l.openPopup();
-          }
+        [permitLayer, countyLayer].forEach(layer => {
+          layer?.eachLayer(l => {
+            const ll = l.getLatLng();
+            if(Math.abs(ll.lat - lat) < 1e-6 && Math.abs(ll.lng - lng) < 1e-6){
+              l.openPopup();
+            }
+          });
         });
       }
     });
@@ -735,16 +896,490 @@ function renderTable(){
 }
 
 // =====================================================================
+// NETWORK GRAPH
+// =====================================================================
+const GRAPH_PALETTE = [
+  '#0b6cb5','#16a34a','#d97706','#dc2626','#8b5cf6','#0891b2',
+  '#ec4899','#65a30d','#f59e0b','#6366f1','#14b8a6','#f43f5e',
+  '#7c3aed','#059669','#b45309','#9333ea'
+];
+const MAX_GRAPH_NODES = 900;
+const MAX_GRAPH_EDGES = 4500;
+const PROXIMITY_METERS = 90;
+
+function normalizeAddress(a){
+  if(!a) return null;
+  return String(a).toUpperCase()
+    .replace(/\s+/g,' ')
+    .replace(/[.,#]/g,'')
+    .replace(/\b(STREET|ST|AVENUE|AVE|BOULEVARD|BLVD|ROAD|RD|DRIVE|DR|COURT|CT|LANE|LN|PLACE|PL|TERRACE|TER)\b/g,'')
+    .trim();
+}
+
+function haversine(lat1, lng1, lat2, lng2){
+  const R = 6371000;
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function buildGraph(){
+  const nodes = [];
+  // Use the currently-filtered view (permits), plus all CIP point features
+  view.forEach((f, i) => {
+    const p = f.properties || {};
+    const [lng, lat] = f.geometry.coordinates;
+    nodes.push({
+      id: `${f._source || 'p'}_${i}`,
+      kind: 'permit',
+      source: f._source || 'city',
+      type: (pick(p, FIELDS.permitType) || 'OTHER').toString().toUpperCase(),
+      status: pick(p, FIELDS.permitStatus) || '',
+      number: pick(p, FIELDS.number) || '',
+      address: pick(p, FIELDS.address) || '',
+      addrKey: normalizeAddress(pick(p, FIELDS.address)),
+      folio: pick(p, FIELDS.folio) || null,
+      date: toMs(pick(p, FIELDS.permitDate)),
+      lat, lng,
+      inDDA: f._inDDA !== false,
+      _f: f
+    });
+  });
+
+  cipData.forEach((f, i) => {
+    if(!f.geometry || f.geometry.type !== 'Point') return;
+    const p = f.properties || {};
+    const [lng, lat] = f.geometry.coordinates;
+    nodes.push({
+      id: `cip_${i}`,
+      kind: 'cip',
+      source: 'cip',
+      type: 'CAPITAL IMPROVEMENT',
+      status: p.Status || p.STATUS || '',
+      address: p.ProjectName || p.NAME || p.Project || p.PROJECT_NAME || p.Title || 'CIP',
+      lat, lng,
+      inDDA: true,
+      _f: f
+    });
+  });
+
+  // Sample down if huge — prefer DDA-inside + most-recent permits
+  let workingNodes = nodes;
+  if(nodes.length > MAX_GRAPH_NODES){
+    workingNodes = nodes.slice().sort((a, b) => {
+      if(a.inDDA !== b.inDDA) return a.inDDA ? -1 : 1;
+      return (b.date || 0) - (a.date || 0);
+    }).slice(0, MAX_GRAPH_NODES);
+  }
+
+  // Build edges
+  const folioIdx = new Map();
+  const addrIdx = new Map();
+  workingNodes.forEach((n, idx) => {
+    if(n.folio){
+      const a = folioIdx.get(n.folio) || []; a.push(idx); folioIdx.set(n.folio, a);
+    }
+    if(n.addrKey){
+      const a = addrIdx.get(n.addrKey) || []; a.push(idx); addrIdx.set(n.addrKey, a);
+    }
+  });
+
+  const edges = [];
+  const seen = new Set();
+  const addEdge = (a, b, weight, kind) => {
+    if(a === b) return;
+    const k = a < b ? `${a}|${b}` : `${b}|${a}`;
+    if(seen.has(k)) return;
+    seen.add(k);
+    edges.push({ source: workingNodes[a].id, target: workingNodes[b].id, weight, kind });
+  };
+
+  folioIdx.forEach(arr => {
+    if(arr.length < 2 || arr.length > 30) return;
+    for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++) addEdge(arr[i], arr[j], 3, 'folio');
+  });
+  addrIdx.forEach(arr => {
+    if(arr.length < 2 || arr.length > 30) return;
+    for(let i=0;i<arr.length;i++) for(let j=i+1;j<arr.length;j++) addEdge(arr[i], arr[j], 2.5, 'address');
+  });
+
+  // Spatial proximity via grid hash (~110m cells)
+  const cell = 0.001;
+  const grid = new Map();
+  workingNodes.forEach((n, idx) => {
+    const k = `${Math.floor(n.lat/cell)},${Math.floor(n.lng/cell)}`;
+    const a = grid.get(k) || []; a.push(idx); grid.set(k, a);
+  });
+  grid.forEach((cellNodes, key) => {
+    const [r, c] = key.split(',').map(Number);
+    const neighbors = [];
+    for(let dr=-1; dr<=1; dr++) for(let dc=-1; dc<=1; dc++){
+      const nk = `${r+dr},${c+dc}`;
+      if(grid.has(nk)) neighbors.push(...grid.get(nk));
+    }
+    cellNodes.forEach(a => {
+      neighbors.forEach(b => {
+        if(a >= b) return;
+        if(edges.length >= MAX_GRAPH_EDGES * 2) return;
+        const d = haversine(workingNodes[a].lat, workingNodes[a].lng, workingNodes[b].lat, workingNodes[b].lng);
+        if(d < PROXIMITY_METERS) addEdge(a, b, 1, 'proximity');
+      });
+    });
+  });
+
+  // Cap edges, prefer strongest
+  let finalEdges = edges;
+  if(finalEdges.length > MAX_GRAPH_EDGES){
+    finalEdges.sort((a, b) => b.weight - a.weight);
+    finalEdges = finalEdges.slice(0, MAX_GRAPH_EDGES);
+  }
+
+  // Degree (for node sizing)
+  const degree = new Map();
+  finalEdges.forEach(e => {
+    degree.set(e.source, (degree.get(e.source) || 0) + 1);
+    degree.set(e.target, (degree.get(e.target) || 0) + 1);
+  });
+  workingNodes.forEach(n => { n.degree = degree.get(n.id) || 0; });
+
+  // Type color assignment — top 12 by frequency, rest get gray
+  const typeCounts = new Map();
+  workingNodes.forEach(n => typeCounts.set(n.type, (typeCounts.get(n.type) || 0) + 1));
+  const topTypes = [...typeCounts.entries()].sort((a,b) => b[1] - a[1]).slice(0, GRAPH_PALETTE.length).map(x => x[0]);
+  const typeColors = new Map();
+  topTypes.forEach((t, i) => typeColors.set(t, GRAPH_PALETTE[i]));
+
+  return { nodes: workingNodes, edges: finalEdges, typeColors, typeCounts, truncated: nodes.length > MAX_GRAPH_NODES };
+}
+
+function renderGraph(){
+  if(typeof d3 === 'undefined'){
+    console.warn('[graph] d3 missing'); return;
+  }
+  const built = buildGraph();
+  graphState = built;
+  const { nodes, edges, typeColors, truncated } = built;
+
+  const svgSel = d3.select('#graph svg');
+  svgSel.selectAll('*').remove();
+  const node0 = svgSel.node();
+  const w = node0.clientWidth || 800, h = node0.clientHeight || 560;
+
+  // Stats
+  document.getElementById('g-nodes').textContent = nodes.length.toLocaleString() + (truncated ? '*' : '');
+  document.getElementById('g-edges').textContent = edges.length.toLocaleString();
+  document.getElementById('g-dda').textContent = nodes.filter(n => n.inDDA).length.toLocaleString();
+
+  // Render legend swatches
+  const legend = document.getElementById('graph-color-legend');
+  legend.innerHTML = '';
+  [...typeColors.entries()].forEach(([t, c]) => {
+    const lbl = t.length > 22 ? t.slice(0, 22) + '…' : t;
+    const div = document.createElement('div');
+    div.innerHTML = `<span style="background:${c}"></span>${lbl}`;
+    legend.appendChild(div);
+  });
+  if([...typeColors.entries()].length === 0){
+    legend.innerHTML = '<div style="color:var(--dim)">No data</div>';
+  }
+
+  const colorOf = n => n.kind === 'cip' ? '#0891b2' : (typeColors.get(n.type) || '#94a3b8');
+  const radiusOf = n => n.kind === 'cip' ? 7 : Math.max(3, Math.min(12, 3 + Math.sqrt(n.degree)));
+
+  // Layered structure: svg > zoom-layer > rotate-layer > contents
+  const zoomLayer = svgSel.append('g').attr('class', 'gz');
+  const rotateLayer = zoomLayer.append('g').attr('class', 'rot');
+  graphZoomBehavior = d3.zoom().scaleExtent([0.2, 6]).on('zoom', e => zoomLayer.attr('transform', e.transform));
+  svgSel.call(graphZoomBehavior);
+
+  // DDA halo (drawn first, behind nodes)
+  const ddaBg = rotateLayer.append('g').attr('class', 'dda-halo');
+
+  // Build adjacency for fast ego-network lookup
+  const adj = new Map();
+  edges.forEach((e, i) => {
+    const s = typeof e.source === 'object' ? e.source.id : e.source;
+    const t = typeof e.target === 'object' ? e.target.id : e.target;
+    if(!adj.has(s)) adj.set(s, { nbrs: new Set(), edges: new Set() });
+    if(!adj.has(t)) adj.set(t, { nbrs: new Set(), edges: new Set() });
+    adj.get(s).nbrs.add(t); adj.get(s).edges.add(i);
+    adj.get(t).nbrs.add(s); adj.get(t).edges.add(i);
+  });
+
+  const linkSel = rotateLayer.append('g')
+    .attr('stroke-opacity', 0.35)
+    .selectAll('line')
+    .data(edges)
+    .enter().append('line')
+      .attr('class', 'glink')
+      .attr('data-i', (d, i) => i)
+      .attr('stroke', d => d.kind === 'folio' ? '#0b6cb5' : d.kind === 'address' ? '#0891b2' : '#cbd5e1')
+      .attr('stroke-width', d => d.weight * 0.55);
+
+  // Recent: permits issued in last 30 days
+  const recentCutoff = Date.now() - 30 * 24 * 3600 * 1000;
+  const isRecent = n => n.kind === 'permit' && n.date && n.date >= recentCutoff;
+
+  const nodeSel = rotateLayer.append('g')
+    .selectAll('circle')
+    .data(nodes)
+    .enter().append('circle')
+      .attr('class', d => 'gnode' + (d.inDDA ? ' gnode-dda' : '') + (isRecent(d) ? ' gnode-recent' : ''))
+      .attr('data-id', d => d.id)
+      .attr('r', radiusOf)
+      .attr('fill', colorOf)
+      .attr('stroke', d => d.inDDA ? '#0b6cb5' : '#ffffff')
+      .attr('stroke-width', d => d.inDDA ? 2 : 1);
+
+  // Persistent hub labels: top 15 by degree
+  const hubNodes = nodes.slice().sort((a, b) => b.degree - a.degree).slice(0, 15).filter(n => n.degree > 0);
+  const hubIds = new Set(hubNodes.map(n => n.id));
+  const hubLabelText = n => {
+    const raw = n.kind === 'cip' ? (n.address || 'CIP') : (n.address || n.number || '');
+    const short = String(raw).split(',')[0].slice(0, 28);
+    return short || n.type;
+  };
+  const labelSel = rotateLayer.append('g').attr('class', 'hub-labels')
+    .selectAll('text')
+    .data(hubNodes)
+    .enter().append('text')
+      .attr('class', 'glabel')
+      .attr('text-anchor', 'middle')
+      .attr('dy', d => -(radiusOf(d) + 5))
+      .text(hubLabelText);
+
+  // Hover-only floating label (single SVG <text>, reused)
+  const hoverLabel = rotateLayer.append('text').attr('class', 'ghover-label').attr('text-anchor', 'middle').style('display', 'none');
+
+  // Tooltip
+  const tip = document.getElementById('graph-tip');
+  const showTip = (ev, d) => {
+    const src = d.kind === 'cip' ? 'CIP' : (d.source === 'county' ? 'Miami-Dade Co.' : 'City of Miami');
+    tip.innerHTML = `
+      <div class="tt-label">${src}${d.inDDA ? ' · IN DDA' : ''}</div>
+      <div class="tt-val" style="margin:2px 0 6px;font-weight:600">${d.number || d.address || ''}</div>
+      <div class="tt-label">Type</div><div class="tt-val">${d.type}</div>
+      ${d.status ? `<div class="tt-label" style="margin-top:4px">Status</div><div class="tt-val">${d.status}</div>` : ''}
+      ${d.date ? `<div class="tt-label" style="margin-top:4px">Date</div><div class="tt-val">${fmtDate(d.date)}</div>` : ''}
+      <div class="tt-label" style="margin-top:4px">Connections</div><div class="tt-val">${d.degree}</div>`;
+    tip.classList.add('show');
+    const rect = document.getElementById('graph').getBoundingClientRect();
+    const tx = Math.min(rect.width - 280, ev.clientX - rect.left + 14);
+    const ty = Math.min(rect.height - 140, ev.clientY - rect.top + 14);
+    tip.style.left = tx + 'px';
+    tip.style.top = ty + 'px';
+  };
+  const hideTip = () => tip.classList.remove('show');
+
+  // Ego-network highlight on hover: fade everything not connected
+  const highlightEgo = (d) => {
+    const a = adj.get(d.id);
+    const litNodes = new Set([d.id]);
+    const litEdges = new Set();
+    if(a){ a.nbrs.forEach(n => litNodes.add(n)); a.edges.forEach(i => litEdges.add(i)); }
+    nodeSel.classed('faded', n => !litNodes.has(n.id))
+           .classed('lit', n => n.id === d.id);
+    linkSel.classed('faded', (_, i) => !litEdges.has(i))
+           .classed('lit', (_, i) => litEdges.has(i));
+    // Show hover label on the hovered node (skip if it's already a hub-labeled node)
+    if(!hubIds.has(d.id)){
+      hoverLabel.style('display', '')
+        .attr('x', d.x).attr('y', d.y - radiusOf(d) - 6)
+        .text(hubLabelText(d));
+    }
+  };
+  const clearHighlight = () => {
+    nodeSel.classed('faded', false).classed('lit', false);
+    linkSel.classed('faded', false).classed('lit', false);
+    hoverLabel.style('display', 'none');
+  };
+
+  nodeSel.on('mousemove', showTip).on('mouseleave', (ev, d) => { hideTip(); clearHighlight(); });
+  nodeSel.on('mouseenter', (ev, d) => highlightEgo(d));
+  nodeSel.on('click', (ev, d) => {
+    if(!d.lat || !d.lng) return;
+    activateView('map');
+    map.setView([d.lat, d.lng], 18);
+    if(d.kind === 'permit'){
+      const targetLayer = d.source === 'county' ? countyLayer : permitLayer;
+      targetLayer?.eachLayer(l => {
+        const ll = l.getLatLng();
+        if(Math.abs(ll.lat - d.lat) < 1e-6 && Math.abs(ll.lng - d.lng) < 1e-6) l.openPopup();
+      });
+    }
+  });
+
+  // Drag behavior
+  nodeSel.call(d3.drag()
+    .on('start', (ev, d) => { if(!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+    .on('drag', (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+    .on('end', (ev, d) => { if(!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }));
+
+  // Stop any previous sim
+  if(graphSim) graphSim.stop();
+
+  // Initial positions: seed from geography for layout stability — gives DDA-inside nodes a centered cluster
+  const lats = nodes.map(n => n.lat).filter(x => x);
+  const lngs = nodes.map(n => n.lng).filter(x => x);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+  const sx = (lng) => (lng - minLng) / (maxLng - minLng || 1) * w * 0.7 + w * 0.15;
+  const sy = (lat) => h - ((lat - minLat) / (maxLat - minLat || 1) * h * 0.7 + h * 0.15);
+  nodes.forEach(n => { n.x = sx(n.lng); n.y = sy(n.lat); });
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(d => 50 / d.weight).strength(d => 0.25 * d.weight))
+    .force('charge', d3.forceManyBody().strength(-22))
+    .force('center', d3.forceCenter(w/2, h/2).strength(0.02))
+    .force('collide', d3.forceCollide().radius(d => radiusOf(d) + 1.5))
+    .alpha(0.9)
+    .alphaDecay(0.04)
+    .on('tick', () => {
+      linkSel.attr('x1', d => d.source.x).attr('y1', d => d.source.y).attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+      nodeSel.attr('cx', d => d.x).attr('cy', d => d.y);
+      labelSel.attr('x', d => d.x).attr('y', d => d.y - radiusOf(d) - 5);
+    })
+    .on('end', () => {
+      // Draw a soft DDA halo around the centroid of DDA-inside nodes
+      const ddaNodes = nodes.filter(n => n.inDDA);
+      if(ddaNodes.length < 3) return;
+      const cx = ddaNodes.reduce((s,n) => s+n.x, 0) / ddaNodes.length;
+      const cy = ddaNodes.reduce((s,n) => s+n.y, 0) / ddaNodes.length;
+      const maxR = Math.max(...ddaNodes.map(n => Math.hypot(n.x-cx, n.y-cy))) + 20;
+      ddaBg.selectAll('*').remove();
+      ddaBg.append('circle').attr('cx', cx).attr('cy', cy).attr('r', maxR)
+        .attr('fill', '#0b6cb5').attr('fill-opacity', 0.04)
+        .attr('stroke', '#0b6cb5').attr('stroke-opacity', 0.35).attr('stroke-dasharray', '6 4').attr('stroke-width', 1.5);
+      ddaBg.append('text').attr('x', cx).attr('y', cy - maxR - 6).attr('text-anchor', 'middle')
+        .attr('font-size', 10).attr('font-weight', 700).attr('letter-spacing', '0.08em')
+        .attr('fill', '#0b6cb5').attr('opacity', 0.7).text('DDA BOUNDARY');
+    });
+
+  graphSim = sim;
+  // Force-stop after 8s to save CPU
+  setTimeout(() => { sim.alphaTarget(0); }, 8000);
+
+  // Rotation: spin the inner layer around the canvas center
+  if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
+  const tickRotate = () => {
+    if(!graphRotate || activeView !== 'graph') return;
+    graphRotateAngle = (graphRotateAngle + 0.08) % 360;
+    rotateLayer.attr('transform', `rotate(${graphRotateAngle} ${w/2} ${h/2})`);
+    // Counter-rotate labels so they stay readable
+    labelSel.attr('transform', d => `rotate(${-graphRotateAngle} ${d.x} ${d.y})`);
+    hoverLabel.attr('transform', function(){
+      const x = +this.getAttribute('x') || 0, y = +this.getAttribute('y') || 0;
+      return `rotate(${-graphRotateAngle} ${x} ${y})`;
+    });
+    graphRotateRAF = requestAnimationFrame(tickRotate);
+  };
+  if(graphRotate) tickRotate();
+
+  // Wire control buttons (idempotent — replace listeners each render via cloneNode-style reset)
+  const ctlBtn = (id) => {
+    const old = document.getElementById(id);
+    const fresh = old.cloneNode(true);
+    old.parentNode.replaceChild(fresh, old);
+    return fresh;
+  };
+  const rotBtn = ctlBtn('g-rotate');
+  rotBtn.classList.toggle('active', graphRotate);
+  rotBtn.addEventListener('click', () => {
+    graphRotate = !graphRotate;
+    rotBtn.classList.toggle('active', graphRotate);
+    if(graphRotate){ tickRotate(); }
+    else {
+      if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
+      rotateLayer.attr('transform', null);
+      labelSel.attr('transform', null);
+      hoverLabel.attr('transform', null);
+      graphRotateAngle = 0;
+    }
+  });
+  ctlBtn('g-reheat').addEventListener('click', () => {
+    sim.alpha(0.9).restart();
+    setTimeout(() => sim.alphaTarget(0), 6000);
+  });
+  ctlBtn('g-reset').addEventListener('click', () => {
+    svgSel.transition().duration(450).call(graphZoomBehavior.transform, d3.zoomIdentity);
+    if(graphRotate){
+      graphRotate = false;
+      document.getElementById('g-rotate').classList.remove('active');
+      if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
+      rotateLayer.attr('transform', null);
+      labelSel.attr('transform', null);
+      graphRotateAngle = 0;
+    }
+    sim.alpha(0.7).restart();
+    setTimeout(() => sim.alphaTarget(0), 5000);
+  });
+}
+
+function activateView(v){
+  if(v === activeView) return;
+  activeView = v;
+  document.querySelectorAll('#view-toggle button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  const mapEl = document.getElementById('map');
+  const graphEl = document.getElementById('graph');
+  const mapLegend = document.getElementById('map-legend');
+  const graphLegend = document.getElementById('graph-legend');
+  const graphStats = document.getElementById('graph-stats');
+  const mapToggles = document.getElementById('map-layer-toggles');
+  const title = document.getElementById('view-title');
+  const graphControls = document.getElementById('graph-controls');
+  if(v === 'graph'){
+    mapEl.classList.add('hidden');
+    graphEl.classList.add('active');
+    mapLegend.style.display = 'none';
+    graphLegend.style.display = '';
+    graphStats.style.display = '';
+    graphControls.style.display = '';
+    mapToggles.style.display = 'none';
+    title.textContent = 'Permit Network Graph';
+    renderGraph();
+  } else {
+    mapEl.classList.remove('hidden');
+    graphEl.classList.remove('active');
+    mapLegend.style.display = '';
+    graphLegend.style.display = 'none';
+    graphStats.style.display = 'none';
+    graphControls.style.display = 'none';
+    mapToggles.style.display = '';
+    title.textContent = 'Geographic Distribution';
+    if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
+    setTimeout(() => map?.invalidateSize(), 50);
+  }
+}
+
+function wireViewToggle(){
+  document.querySelectorAll('#view-toggle button').forEach(b => {
+    b.addEventListener('click', () => activateView(b.dataset.view));
+  });
+  // Re-render graph on window resize
+  let rt;
+  window.addEventListener('resize', () => {
+    clearTimeout(rt);
+    rt = setTimeout(() => { if(activeView === 'graph') renderGraph(); }, 250);
+  });
+}
+
+// =====================================================================
 // KPIs
 // =====================================================================
 function renderKPIs(){
-  document.getElementById('kpi-permits').textContent = view.length.toLocaleString();
+  const inDDA = view.filter(f => f._inDDA !== false);
+  const nearby = view.length - inDDA.length;
+  document.getElementById('kpi-permits').textContent = inDDA.length.toLocaleString();
+  document.getElementById('kpi-permits-sub').textContent = nearby > 0
+    ? `+ ${nearby.toLocaleString()} nearby county`
+    : 'Inside DDA boundary';
   document.getElementById('kpi-cip').textContent = cipData.length.toLocaleString();
 
   const cutoff = Date.now() - 30*24*3600*1000;
   let recent = 0;
   const types = new Set();
-  view.forEach(f=>{
+  inDDA.forEach(f=>{
     const p = f.properties || {};
     const ms = toMs(pick(p, FIELDS.permitDate));
     if(!isNaN(ms) && ms >= cutoff) recent++;
@@ -780,6 +1415,7 @@ function showError(title, detail){
     if(typeof L === 'undefined')    missing.push('Leaflet');
     if(typeof Chart === 'undefined') missing.push('Chart.js');
     if(typeof turf === 'undefined')  missing.push('Turf.js');
+    if(typeof d3 === 'undefined')    missing.push('D3.js');
     if(missing.length){
       showError('Library load failed', `Could not load: ${missing.join(', ')}.<br><br>
         Likely cause: ad blocker, content blocker, or offline.<br>
@@ -822,6 +1458,7 @@ function showError(title, detail){
     populateFilterOptions();
     wireFilters();
     wireLayerToggles();
+    wireViewToggle();
     renderCIPMarkers();
     applyFilters();      // renders markers, KPIs, charts, table, count
 

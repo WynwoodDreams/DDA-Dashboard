@@ -188,6 +188,26 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
 .graph-controls button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .graph-controls .ico{display:inline-block;width:10px;height:10px}
 
+/* Time scrubber */
+.scrubber{position:absolute;left:14px;right:200px;bottom:14px;background:rgba(255,255,255,.97);border:1px solid var(--border-2);border-radius:10px;box-shadow:var(--shadow);padding:8px 14px 4px;z-index:401;display:none;font-family:'Inter',sans-serif}
+.scrubber.active{display:block}
+.scrubber-head{display:flex;justify-content:space-between;align-items:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.scrubber-head .sc-range{color:var(--accent);font-family:var(--mono);font-weight:600;text-transform:none;letter-spacing:0;font-size:11px}
+.scrubber-head .sc-actions{display:flex;gap:6px}
+.scrubber-head button{appearance:none;background:var(--panel-2);border:1px solid var(--border-2);border-radius:6px;color:var(--muted);font-family:'Inter',sans-serif;font-size:10px;font-weight:600;padding:3px 8px;cursor:pointer;letter-spacing:.02em}
+.scrubber-head button:hover{color:var(--accent);border-color:var(--accent)}
+.scrubber-head button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.scrubber svg{display:block;width:100%;height:46px;overflow:visible}
+.sc-track{fill:#eef1f5}
+.sc-bars rect{fill:#cfd6df}
+.sc-bars rect.in{fill:#0b6cb5}
+.sc-axis text{font-size:9px;fill:var(--muted);font-family:'Inter',sans-serif}
+.sc-axis line,.sc-axis path{stroke:#cbd5e1}
+.sc-selection{fill:rgba(11,108,181,.18);stroke:#0b6cb5;stroke-width:1.5;cursor:move}
+.sc-handle{fill:#0b6cb5;cursor:ew-resize;rx:2}
+.gnode.out-of-window{opacity:.06}
+.glink.out-of-window{stroke-opacity:.04 !important}
+
 /* Mini-map overview */
 .minimap{position:absolute;bottom:14px;right:14px;width:170px;height:120px;background:rgba(255,255,255,.96);border:1px solid var(--border-2);border-radius:8px;box-shadow:var(--shadow);overflow:hidden;z-index:401;cursor:pointer}
 .minimap svg{display:block;width:100%;height:100%}
@@ -289,6 +309,16 @@ tbody tr:hover td:first-child{color:var(--accent);font-weight:600}
         <div class="minimap" id="minimap" style="display:none">
           <span class="mm-label">Overview</span>
           <svg></svg>
+        </div>
+        <div class="scrubber" id="scrubber">
+          <div class="scrubber-head">
+            <span>Time window · <span class="sc-range" id="sc-range">--</span></span>
+            <div class="sc-actions">
+              <button id="sc-play" title="Play through time">▶ Play</button>
+              <button id="sc-all" title="Show all">Show all</button>
+            </div>
+          </div>
+          <svg id="sc-svg"></svg>
         </div>
       </div>
       <div class="legend" id="map-legend">
@@ -416,6 +446,9 @@ let graphZoomBehavior = null;
 let pinnedNodeId = null;
 const activeTypeFilter = new Set();   // empty = show all
 let graphBundleOn = false;
+let scrubberWindow = null;             // [startMs, endMs] or null = show all
+let scrubberPlaying = false;
+let scrubberPlayRAF = null;
 
 // =====================================================================
 // HELPERS
@@ -1569,6 +1602,169 @@ function renderGraph(){
     svgSel.transition().duration(400).call(graphZoomBehavior.transform, newT);
   });
 
+  // ---- Time scrubber ----
+  const datedNodes = nodes.filter(n => n.date && !isNaN(n.date));
+  const scSvg = d3.select('#sc-svg');
+  scSvg.selectAll('*').remove();
+  const scContainer = document.getElementById('scrubber');
+  const scW = (scContainer.clientWidth || 600) - 28;
+  const scH = 46;
+  scSvg.attr('viewBox', `0 0 ${scW} ${scH}`);
+
+  function applyTimeWindow(){
+    if(!scrubberWindow){
+      nodeSel.classed('out-of-window', false);
+      linkSel.classed('out-of-window', false);
+      return;
+    }
+    const [a, b] = scrubberWindow;
+    const inWindow = n => !n.date || (n.date >= a && n.date <= b);
+    nodeSel.classed('out-of-window', n => !inWindow(n));
+    linkSel.classed('out-of-window', d => {
+      const sn = typeof d.source === 'object' ? d.source : nodeById.get(d.source);
+      const tn = typeof d.target === 'object' ? d.target : nodeById.get(d.target);
+      return !inWindow(sn) || !inWindow(tn);
+    });
+  }
+
+  if(datedNodes.length === 0){
+    scSvg.append('text').attr('x', scW/2).attr('y', scH/2).attr('text-anchor', 'middle')
+      .attr('fill', '#97a3b2').attr('font-size', 11).text('No dated permits in current view');
+    document.getElementById('sc-range').textContent = '--';
+    scrubberWindow = null;
+    applyTimeWindow();
+  } else {
+    const minD = d3.min(datedNodes, n => n.date);
+    const maxD = d3.max(datedNodes, n => n.date);
+    const monthMs = 30 * 24 * 3600 * 1000;
+    const buckets = Math.max(6, Math.min(48, Math.round((maxD - minD) / monthMs)));
+    const x = d3.scaleLinear().domain([minD, maxD]).range([0, scW]);
+    const hist = new Array(buckets).fill(0);
+    datedNodes.forEach(n => {
+      const i = Math.min(buckets - 1, Math.floor((n.date - minD) / (maxD - minD + 1) * buckets));
+      hist[i]++;
+    });
+    const maxH = Math.max(...hist, 1);
+    const bandW = scW / buckets;
+
+    scSvg.append('rect').attr('class', 'sc-track').attr('x', 0).attr('y', 0).attr('width', scW).attr('height', scH - 14).attr('rx', 3);
+    const barsG = scSvg.append('g').attr('class', 'sc-bars');
+    const barSel = barsG.selectAll('rect').data(hist).enter().append('rect')
+      .attr('x', (_, i) => i * bandW + 1)
+      .attr('y', d => (scH - 14) - (d / maxH) * (scH - 16))
+      .attr('width', bandW - 2)
+      .attr('height', d => (d / maxH) * (scH - 16))
+      .attr('rx', 1);
+
+    const axis = scSvg.append('g').attr('class', 'sc-axis').attr('transform', `translate(0,${scH - 12})`);
+    const tickCount = scW < 500 ? 3 : 5;
+    const ticks = x.ticks(tickCount);
+    axis.selectAll('text').data(ticks).enter().append('text')
+      .attr('x', d => x(d)).attr('y', 10).attr('text-anchor', 'middle')
+      .text(d => new Date(d).toISOString().slice(0, 7));
+
+    if(!scrubberWindow){
+      const span = maxD - minD;
+      scrubberWindow = [Math.max(minD, maxD - span * 0.25), maxD];
+    } else {
+      scrubberWindow = [Math.max(minD, scrubberWindow[0]), Math.min(maxD, scrubberWindow[1])];
+    }
+
+    const selG = scSvg.append('g');
+    const selRect = selG.append('rect').attr('class', 'sc-selection').attr('y', 0).attr('height', scH - 14);
+    const handleL = selG.append('rect').attr('class', 'sc-handle').attr('y', 0).attr('width', 4).attr('height', scH - 14);
+    const handleR = selG.append('rect').attr('class', 'sc-handle').attr('y', 0).attr('width', 4).attr('height', scH - 14);
+
+    function paintSelection(){
+      const xa = x(scrubberWindow[0]), xb = x(scrubberWindow[1]);
+      selRect.attr('x', xa).attr('width', Math.max(2, xb - xa));
+      handleL.attr('x', xa - 2);
+      handleR.attr('x', xb - 2);
+      barSel.classed('in', (_, i) => {
+        const tStart = minD + (i / buckets) * (maxD - minD);
+        const tEnd   = minD + ((i+1) / buckets) * (maxD - minD);
+        return tEnd >= scrubberWindow[0] && tStart <= scrubberWindow[1];
+      });
+      document.getElementById('sc-range').textContent =
+        `${new Date(scrubberWindow[0]).toISOString().slice(0,10)} → ${new Date(scrubberWindow[1]).toISOString().slice(0,10)}`;
+      applyTimeWindow();
+    }
+
+    const dragHandle = (which) => d3.drag()
+      .on('drag', (ev) => {
+        const t = Math.max(minD, Math.min(maxD, x.invert(Math.max(0, Math.min(scW, ev.x)))));
+        if(which === 'L') scrubberWindow[0] = Math.min(t, scrubberWindow[1] - 86400000);
+        else              scrubberWindow[1] = Math.max(t, scrubberWindow[0] + 86400000);
+        paintSelection();
+      });
+    handleL.call(dragHandle('L'));
+    handleR.call(dragHandle('R'));
+    let dragStart = null;
+    selRect.call(d3.drag()
+      .on('start', (ev) => { dragStart = { x: ev.x, w: [scrubberWindow[0], scrubberWindow[1]] }; })
+      .on('drag', (ev) => {
+        const dxMs = x.invert(ev.x).valueOf() - x.invert(dragStart.x).valueOf();
+        let a = dragStart.w[0] + dxMs, b = dragStart.w[1] + dxMs;
+        if(a < minD){ const sh = minD - a; a += sh; b += sh; }
+        if(b > maxD){ const sh = b - maxD; a -= sh; b -= sh; }
+        scrubberWindow = [a, b];
+        paintSelection();
+      }));
+
+    paintSelection();
+
+    // Play button (replace listener on each render)
+    const playBtn = (() => {
+      const old = document.getElementById('sc-play');
+      const fresh = old.cloneNode(true); old.parentNode.replaceChild(fresh, old);
+      return fresh;
+    })();
+    function stopPlay(){
+      scrubberPlaying = false;
+      playBtn.textContent = '▶ Play';
+      playBtn.classList.remove('active');
+      if(scrubberPlayRAF){ cancelAnimationFrame(scrubberPlayRAF); scrubberPlayRAF = null; }
+    }
+    function startPlay(){
+      scrubberPlaying = true;
+      playBtn.textContent = '❚❚ Pause';
+      playBtn.classList.add('active');
+      const totalSpan = maxD - minD;
+      const windowSpan = scrubberWindow[1] - scrubberWindow[0];
+      const stepMs = totalSpan / 200;
+      if(scrubberWindow[1] >= maxD - 1){ scrubberWindow = [minD, minD + windowSpan]; paintSelection(); }
+      let last = performance.now();
+      const tick = (now) => {
+        if(!scrubberPlaying) return;
+        const dt = now - last; last = now;
+        const advance = stepMs * (dt / 16.67);
+        scrubberWindow = [scrubberWindow[0] + advance, scrubberWindow[1] + advance];
+        if(scrubberWindow[1] >= maxD){
+          scrubberWindow[1] = maxD;
+          scrubberWindow[0] = maxD - windowSpan;
+          paintSelection();
+          stopPlay();
+          return;
+        }
+        paintSelection();
+        scrubberPlayRAF = requestAnimationFrame(tick);
+      };
+      scrubberPlayRAF = requestAnimationFrame(tick);
+    }
+    playBtn.addEventListener('click', () => scrubberPlaying ? stopPlay() : startPlay());
+
+    const showAllBtn = (() => {
+      const old = document.getElementById('sc-all');
+      const fresh = old.cloneNode(true); old.parentNode.replaceChild(fresh, old);
+      return fresh;
+    })();
+    showAllBtn.addEventListener('click', () => {
+      stopPlay();
+      scrubberWindow = [minD, maxD];
+      paintSelection();
+    });
+  }
+
   // Rotation: spin the inner layer around the canvas center
   if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
   const tickRotate = () => {
@@ -1653,6 +1849,7 @@ function activateView(v){
   const title = document.getElementById('view-title');
   const graphControls = document.getElementById('graph-controls');
   const minimap = document.getElementById('minimap');
+  const scrubber = document.getElementById('scrubber');
   if(v === 'graph'){
     mapEl.classList.add('hidden');
     graphEl.classList.add('active');
@@ -1661,6 +1858,7 @@ function activateView(v){
     graphStats.style.display = '';
     graphControls.style.display = '';
     minimap.style.display = '';
+    scrubber.classList.add('active');
     mapToggles.style.display = 'none';
     title.textContent = 'Permit Network Graph';
     renderGraph();
@@ -1672,9 +1870,11 @@ function activateView(v){
     graphStats.style.display = 'none';
     graphControls.style.display = 'none';
     minimap.style.display = 'none';
+    scrubber.classList.remove('active');
     mapToggles.style.display = '';
     title.textContent = 'Geographic Distribution';
     if(graphRotateRAF){ cancelAnimationFrame(graphRotateRAF); graphRotateRAF = null; }
+    if(scrubberPlayRAF){ cancelAnimationFrame(scrubberPlayRAF); scrubberPlayRAF = null; scrubberPlaying = false; }
     setTimeout(() => map?.invalidateSize(), 50);
   }
 }
